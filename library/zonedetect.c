@@ -101,8 +101,19 @@ static char* ZDParseString(ZoneDetect* library, uint32_t* index) {
         return NULL;
     }
 
-    if(strLength > 1024) {
-        return NULL;
+    uint32_t strOffset = *index;
+    unsigned int remoteStr = 0;
+    if(strLength >= 256) {
+        strOffset = library->metadataOffset + strLength - 256;
+        remoteStr = 1;
+
+        if(!ZDDecodeVariableLengthUnsigned(library, &strOffset, &strLength)) {
+            return NULL;
+        }
+
+        if(strLength > 256) {
+            return NULL;
+        }
     }
 
     char* str = malloc(strLength + 1);
@@ -110,12 +121,14 @@ static char* ZDParseString(ZoneDetect* library, uint32_t* index) {
     if(str) {
         unsigned int i;
         for(i=0; i<strLength; i++) {
-            str[i] = library->mapping[*index+i] ^ 0x80;
+            str[i] = library->mapping[strOffset+i] ^ 0x80;
         }
         str[strLength] = 0;
     }
 
-    *index += strLength;
+    if(!remoteStr) {
+        *index += strLength;
+    }
 
     return str;
 }
