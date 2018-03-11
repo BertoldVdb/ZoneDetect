@@ -15,5 +15,4 @@ It takes the following GET parameters:
 * c: Set to one (c=1) to produce compact JSON.
 
 For example: [https://api.bertold.org/geozone?lat=51&lon=5](https://api.bertold.org/geozone?lat=51&lon=5)  
-Please do not use this API in an application that will result in a lot of server load :)
-  
+You are free to use this API for any application, but I am not responsible for the quality of service. Please contact me if your application requires reliability. 
