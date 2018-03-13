@@ -371,6 +371,9 @@ void ZDCloseDatabase(ZoneDetect* library) {
         if(library->mapping) {
             munmap(library->mapping, library->length);
         }
+        if(library->fd >= 0) {
+            close(library->fd);
+        }
         free(library);
     }
 }
@@ -381,18 +384,18 @@ ZoneDetect* ZDOpenDatabase(const char* path) {
     if(library) {
         memset(library, 0, sizeof(*library));
 
-        int fd = open(path, O_RDONLY | O_CLOEXEC);
-        if(fd < 0) {
+        library->fd = open(path, O_RDONLY | O_CLOEXEC);
+        if(library->fd < 0) {
             goto fail;
         }
 
-        library->length = lseek(fd, 0, SEEK_END);
+        library->length = lseek(library->fd, 0, SEEK_END);
         if(library->length <= 0) {
             goto fail;
         }
-        lseek(fd, 0, SEEK_SET);
+        lseek(library->fd, 0, SEEK_SET);
 
-        library->mapping = mmap(NULL, library->length, PROT_READ, MAP_PRIVATE | MAP_FILE, fd, 0);
+        library->mapping = mmap(NULL, library->length, PROT_READ, MAP_PRIVATE | MAP_FILE, library->fd, 0);
         if(!library->mapping) {
             goto fail;
         }
