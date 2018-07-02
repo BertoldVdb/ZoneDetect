@@ -26,6 +26,7 @@
  */
 
 #include <sys/mman.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
@@ -36,7 +37,7 @@
 
 struct ZoneDetectOpaque {
     int fd;
-    uint32_t length;
+    off_t length;
     uint8_t* mapping;
 
     uint8_t tableType;
