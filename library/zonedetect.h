@@ -46,8 +46,8 @@ typedef struct {
 
     uint32_t metaId;
     uint8_t numFields;
-    char** fieldNames;
-    char** data;
+    char **fieldNames;
+    char **data;
 } ZoneDetectResult;
 
 struct ZoneDetectOpaque;
@@ -57,15 +57,15 @@ typedef struct ZoneDetectOpaque ZoneDetect;
 extern "C" {
 #endif
 
-ZoneDetect* ZDOpenDatabase(const char* path);
-void        ZDCloseDatabase(ZoneDetect* library);
+ZoneDetect *ZDOpenDatabase(const char *path);
+void        ZDCloseDatabase(ZoneDetect *library);
 
-ZoneDetectResult* ZDLookup(ZoneDetect* library, float lat, float lon, float* safezone);
-void              ZDFreeResults(ZoneDetectResult* results);
+ZoneDetectResult *ZDLookup(ZoneDetect *library, float lat, float lon, float *safezone);
+void              ZDFreeResults(ZoneDetectResult *results);
 
-const char* ZDGetNotice(ZoneDetect* library);
-uint8_t     ZDGetTableType(ZoneDetect* library);
-const char* ZDLookupResultToString(ZDLookupResult result);
+const char *ZDGetNotice(ZoneDetect *library);
+uint8_t     ZDGetTableType(ZoneDetect *library);
+const char *ZDLookupResultToString(ZDLookupResult result);
 
 #ifdef __cplusplus
 }

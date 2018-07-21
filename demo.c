@@ -29,15 +29,19 @@
 #include <stdlib.h>
 #include "zonedetect.h"
 
-void printResults(ZoneDetectResult* results, float safezone) {
-    if(!results){return;}
+void printResults(ZoneDetectResult *results, float safezone)
+{
+    if(!results) {
+        return;
+    }
+
     unsigned int index = 0;
     while(results[index].lookupResult != ZD_LOOKUP_END) {
-        printf("%s:\n", ZDLookupResultToString(results[index].lookupResult)); 
+        printf("%s:\n", ZDLookupResultToString(results[index].lookupResult));
         printf("  meta: %u\n", results[index].metaId);
-        if(results[index].data){ 
-            for(unsigned int i=0; i<results[index].numFields; i++){
-                if(results[index].fieldNames[i] && results[index].data[i]){
+        if(results[index].data) {
+            for(unsigned int i = 0; i < results[index].numFields; i++) {
+                if(results[index].fieldNames[i] && results[index].data[i]) {
                     printf("  %s: %s\n", results[index].fieldNames[i], results[index].data[i]);
                 }
             }
@@ -45,20 +49,21 @@ void printResults(ZoneDetectResult* results, float safezone) {
         index++;
     }
     ZDFreeResults(results);
-    
-    if(index){
-        printf("Safezone: %f\n", safezone); 
+
+    if(index) {
+        printf("Safezone: %f\n", safezone);
     }
     printf("\n\n");
 }
 
-int main(int argc, char* argv[]) {
-    ZoneDetect* cd;
+int main(int argc, char *argv[])
+{
+    ZoneDetect *cd;
     if(argc != 4) {
         printf("Usage: %s dbname lat lon\n", argv[0]);
         exit(0);
     }
-    
+
     cd = ZDOpenDatabase(argv[1]);
     if(!cd) {
         printf("Init failed\n");
