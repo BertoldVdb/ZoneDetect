@@ -1,0 +1,9 @@
+{
+  "name": "zd",
+  "version": "1.0.0",
+  "private": false,
+  "gypfile": true,
+  "dependencies": {
+    "node-addon-api": ""
+  }
+}
