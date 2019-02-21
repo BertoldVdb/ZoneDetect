@@ -4,7 +4,7 @@ This is a C library that allows you to find an area a point belongs to using a d
 
 The API should be self-explanatory from zonedetect.h. A small demo is included (demo.c)
 
-The databases are obtained from [https://github.com/evansiroky/timezone-boundary-builder](here) and converted to the format used by this library.
+The databases are obtained from [here](https://github.com/evansiroky/timezone-boundary-builder) and converted to the format used by this library.
 
 ### Online API
 You can test the library using an online API: [https://api.bertold.org/geozone](https://api.bertold.org/geozone)
