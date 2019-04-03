@@ -49,4 +49,4 @@ obj/%.o: src/%.c $(INCLUDES_SRC)
 	$(CC) $(CFLAGS) $< -o $@
 
 clean:
-	rm -r $(OBJECTS_OBJ) $(EXECUTABLE)
+	rm -rf $(OBJECTS_OBJ) $(EXECUTABLE)
