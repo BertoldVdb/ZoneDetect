@@ -60,11 +60,11 @@ extern "C" {
 ZoneDetect *ZDOpenDatabase(const char *path);
 void        ZDCloseDatabase(ZoneDetect *library);
 
-ZoneDetectResult *ZDLookup(ZoneDetect *library, float lat, float lon, float *safezone);
+ZoneDetectResult *ZDLookup(const ZoneDetect *library, float lat, float lon, float *safezone);
 void              ZDFreeResults(ZoneDetectResult *results);
 
-const char *ZDGetNotice(ZoneDetect *library);
-uint8_t     ZDGetTableType(ZoneDetect *library);
+const char *ZDGetNotice(const ZoneDetect *library);
+uint8_t     ZDGetTableType(const ZoneDetect *library);
 const char *ZDLookupResultToString(ZDLookupResult result);
 
 #ifdef __cplusplus
