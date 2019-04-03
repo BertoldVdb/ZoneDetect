@@ -158,7 +158,7 @@ static int ZDParseHeader(ZoneDetect *library)
 
     uint32_t index = UINT32_C(7);
 
-    library->fieldNames = malloc(library->numFields * sizeof(char *));
+    library->fieldNames = malloc(library->numFields * sizeof *library->fieldNames);
     for(size_t i = 0; i < library->numFields; i++) {
         library->fieldNames[i] = ZDParseString(library, &index);
     }
@@ -385,7 +385,7 @@ void ZDCloseDatabase(ZoneDetect *library)
 
 ZoneDetect *ZDOpenDatabase(const char *path)
 {
-    ZoneDetect *const library = (ZoneDetect *)malloc(sizeof(*library));
+    ZoneDetect *const library = malloc(sizeof *library);
 
     if(library) {
         memset(library, 0, sizeof(*library));
@@ -431,7 +431,7 @@ ZoneDetectResult *ZDLookup(const ZoneDetect *library, float lat, float lon, floa
     uint32_t metadataIndex = 0;
     uint32_t polygonIndex = 0;
 
-    ZoneDetectResult *results = malloc(sizeof(ZoneDetectResult));
+    ZoneDetectResult *results = malloc(sizeof *results);
     if(!results) {
         return NULL;
     }
@@ -462,7 +462,7 @@ ZoneDetectResult *ZDLookup(const ZoneDetect *library, float lat, float lon, floa
                 if(lookupResult == ZD_LOOKUP_PARSE_ERROR) {
                     break;
                 } else if(lookupResult != ZD_LOOKUP_NOT_IN_ZONE) {
-                    ZoneDetectResult *const newResults = realloc(results, sizeof(ZoneDetectResult) * (numResults + 2));
+                    ZoneDetectResult *const newResults = realloc(results, sizeof *newResults * (numResults + 2));
 
                     if(newResults) {
                         results = newResults;
@@ -527,7 +527,7 @@ ZoneDetectResult *ZDLookup(const ZoneDetect *library, float lat, float lon, floa
     /* Lookup metadata */
     for(size_t i = 0; i < numResults; i++) {
         uint32_t tmpIndex = library->metadataOffset + results[i].metaId;
-        results[i].data = malloc(library->numFields * sizeof(char *));
+        results[i].data = malloc(library->numFields * sizeof *results[i].data);
         if(results[i].data) {
             for(size_t j = 0; j < library->numFields; j++) {
                 results[i].data[j] = ZDParseString(library, &tmpIndex);
