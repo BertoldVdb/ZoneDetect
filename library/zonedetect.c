@@ -56,18 +56,18 @@ struct ZoneDetectOpaque {
 
 static int32_t ZDFloatToFixedPoint(float input, float scale, unsigned int precision)
 {
-    float inputScaled = input / scale;
+    const float inputScaled = input / scale;
     return (int32_t)(inputScaled * (float)(1 << (precision - 1)));
 }
 
-static unsigned int ZDDecodeVariableLengthUnsigned(ZoneDetect *library, uint32_t *index, uint32_t *result)
+static unsigned int ZDDecodeVariableLengthUnsigned(const ZoneDetect *library, uint32_t *index, uint32_t *result)
 {
     if(*index >= (uint32_t)library->length) {
         return 0;
     }
 
-    uint8_t *buffer = library->mapping + *index;
-    uint8_t *bufferEnd = library->mapping + library->length - 1;
+    uint8_t *const buffer = library->mapping + *index;
+    uint8_t *const bufferEnd = library->mapping + library->length - 1;
 
     uint32_t value = 0;
     unsigned int i = 0, shift = 0;
@@ -91,15 +91,15 @@ static unsigned int ZDDecodeVariableLengthUnsigned(ZoneDetect *library, uint32_t
     return i;
 }
 
-static unsigned int ZDDecodeVariableLengthSigned(ZoneDetect *library, uint32_t *index, int32_t *result)
+static unsigned int ZDDecodeVariableLengthSigned(const ZoneDetect *library, uint32_t *index, int32_t *result)
 {
     uint32_t value = 0;
-    unsigned int retVal = ZDDecodeVariableLengthUnsigned(library, index, &value);
+    const unsigned int retVal = ZDDecodeVariableLengthUnsigned(library, index, &value);
     *result = (value & 1) ? -(int32_t)(value / 2) : (int32_t)(value / 2);
     return retVal;
 }
 
-static char *ZDParseString(ZoneDetect *library, uint32_t *index)
+static char *ZDParseString(const ZoneDetect *library, uint32_t *index)
 {
     uint32_t strLength;
     if(!ZDDecodeVariableLengthUnsigned(library, index, &strLength)) {
@@ -121,7 +121,7 @@ static char *ZDParseString(ZoneDetect *library, uint32_t *index)
         }
     }
 
-    char *str = malloc(strLength + 1);
+    char *const str = malloc(strLength + 1);
 
     if(str) {
         for(size_t i = 0; i < strLength; i++) {
@@ -204,7 +204,7 @@ static int ZDPointInBox(int32_t xl, int32_t x, int32_t xr, int32_t yl, int32_t y
     return 0;
 }
 
-static ZDLookupResult ZDPointInPolygon(ZoneDetect *library, uint32_t polygonIndex, int32_t latFixedPoint, int32_t lonFixedPoint, uint64_t *distanceSqrMin)
+static ZDLookupResult ZDPointInPolygon(const ZoneDetect *library, uint32_t polygonIndex, int32_t latFixedPoint, int32_t lonFixedPoint, uint64_t *distanceSqrMin)
 {
     uint32_t numVertices;
     int32_t pointLat = 0, pointLon = 0, diffLat = 0, diffLon = 0, firstLat = 0, firstLon = 0, prevLat = 0, prevLon = 0;
@@ -288,14 +288,14 @@ static ZDLookupResult ZDPointInPolygon(ZoneDetect *library, uint32_t polygonInde
                 }
 
                 /* Check if the target is on the border */
-                int32_t intersectLon = (int32_t)(((float)latFixedPoint - b) / a);
+                const int32_t intersectLon = (int32_t)(((float)latFixedPoint - b) / a);
                 if(intersectLon == lonFixedPoint) {
                     if(distanceSqrMin) *distanceSqrMin = 0;
                     return ZD_LOOKUP_ON_BORDER_SEGMENT;
                 }
 
                 /* Ok, it's not. In which direction did we go round the target? */
-                int sign = (intersectLon < lonFixedPoint) ? 2 : -2;
+                const int sign = (intersectLon < lonFixedPoint) ? 2 : -2;
                 if(quadrant == 2 || quadrant == 3) {
                     winding += sign;
                 } else {
@@ -319,7 +319,7 @@ static ZDLookupResult ZDPointInPolygon(ZoneDetect *library, uint32_t polygonInde
                     }
                 }
 
-                int closestInBox = ZDPointInBox(pointLon, (int32_t)closestLon, prevLon, pointLat, (int32_t)closestLat, prevLat);
+                const int closestInBox = ZDPointInBox(pointLon, (int32_t)closestLon, prevLon, pointLat, (int32_t)closestLat, prevLat);
 
                 int64_t diffLat, diffLon;
                 if(closestInBox) {
@@ -385,7 +385,7 @@ void ZDCloseDatabase(ZoneDetect *library)
 
 ZoneDetect *ZDOpenDatabase(const char *path)
 {
-    ZoneDetect *library = (ZoneDetect *)malloc(sizeof(*library));
+    ZoneDetect *const library = (ZoneDetect *)malloc(sizeof(*library));
 
     if(library) {
         memset(library, 0, sizeof(*library));
@@ -419,10 +419,10 @@ fail:
     return NULL;
 }
 
-ZoneDetectResult *ZDLookup(ZoneDetect *library, float lat, float lon, float *safezone)
+ZoneDetectResult *ZDLookup(const ZoneDetect *library, float lat, float lon, float *safezone)
 {
-    int32_t latFixedPoint = ZDFloatToFixedPoint(lat, 90, library->precision);
-    int32_t lonFixedPoint = ZDFloatToFixedPoint(lon, 180, library->precision);
+    const int32_t latFixedPoint = ZDFloatToFixedPoint(lat, 90, library->precision);
+    const int32_t lonFixedPoint = ZDFloatToFixedPoint(lon, 180, library->precision);
     size_t numResults = 0;
     uint64_t distanceSqrMin = (uint64_t)-1;
 
@@ -458,11 +458,11 @@ ZoneDetectResult *ZDLookup(ZoneDetect *library, float lat, float lon, float *saf
                 if(library->metadataOffset + metadataIndex >= library->dataOffset) continue;
                 if(library->dataOffset + polygonIndex >= (uint32_t)library->length) continue;
 
-                ZDLookupResult lookupResult = ZDPointInPolygon(library, library->dataOffset + polygonIndex, latFixedPoint, lonFixedPoint, (safezone) ? &distanceSqrMin : NULL);
+                const ZDLookupResult lookupResult = ZDPointInPolygon(library, library->dataOffset + polygonIndex, latFixedPoint, lonFixedPoint, (safezone) ? &distanceSqrMin : NULL);
                 if(lookupResult == ZD_LOOKUP_PARSE_ERROR) {
                     break;
                 } else if(lookupResult != ZD_LOOKUP_NOT_IN_ZONE) {
-                    ZoneDetectResult *newResults = realloc(results, sizeof(ZoneDetectResult) * (numResults + 2));
+                    ZoneDetectResult *const newResults = realloc(results, sizeof(ZoneDetectResult) * (numResults + 2));
 
                     if(newResults) {
                         results = newResults;
@@ -570,12 +570,12 @@ void ZDFreeResults(ZoneDetectResult *results)
     free(results);
 }
 
-const char *ZDGetNotice(ZoneDetect *library)
+const char *ZDGetNotice(const ZoneDetect *library)
 {
     return library->notice;
 }
 
-uint8_t ZDGetTableType(ZoneDetect *library)
+uint8_t ZDGetTableType(const ZoneDetect *library)
 {
     return library->tableType;
 }
