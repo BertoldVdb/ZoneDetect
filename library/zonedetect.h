@@ -27,8 +27,8 @@
 
 #include <stdint.h>
 
-#ifndef _ZONEDETECT_H_
-#define _ZONEDETECT_H_
+#ifndef INCL_ZONEDETECT_H_
+#define INCL_ZONEDETECT_H_
 
 typedef enum {
     ZD_LOOKUP_IGNORE = -3,
@@ -71,4 +71,4 @@ const char *ZDLookupResultToString(ZDLookupResult result);
 }
 #endif
 
-#endif
+#endif // INCL_ZONEDETECT_H_
