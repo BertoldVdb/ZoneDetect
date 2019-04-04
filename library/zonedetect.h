@@ -67,6 +67,9 @@ const char *ZDGetNotice(const ZoneDetect *library);
 uint8_t     ZDGetTableType(const ZoneDetect *library);
 const char *ZDLookupResultToString(ZDLookupResult result);
 
+int         ZDSetErrorHandler(void (*handler)(int, int));
+const char *ZDGetErrorString(int error);
+
 #ifdef __cplusplus
 }
 #endif

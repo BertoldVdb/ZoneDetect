@@ -53,31 +53,33 @@ void printResults(ZoneDetectResult *results, float safezone)
     if(index) {
         printf("Safezone: %f\n", safezone);
     }
-    printf("\n\n");
+}
+
+void onError(int errZD, int errNative)
+{
+    fprintf(stderr, "ZD error: %s (0x%08X)\n", ZDGetErrorString(errZD), (unsigned)errNative);
 }
 
 int main(int argc, char *argv[])
 {
-    ZoneDetect *cd;
     if(argc != 4) {
         printf("Usage: %s dbname lat lon\n", argv[0]);
-        exit(0);
+        return 1;
     }
 
-    cd = ZDOpenDatabase(argv[1]);
-    if(!cd) {
-        printf("Init failed\n");
-        exit(0);
-    }
+    ZDSetErrorHandler(onError);
 
-    float lat = atof(argv[2]);
-    float lon = atof(argv[3]);
+    ZoneDetect *const cd = ZDOpenDatabase(argv[1]);
+    if(!cd) return 2;
+
+    const float lat = (float)atof(argv[2]);
+    const float lon = (float)atof(argv[3]);
 
     float safezone = 0;
     ZoneDetectResult *results = ZDLookup(cd, lat, lon, &safezone);
     printResults(results, safezone);
 
     ZDCloseDatabase(cd);
+
     return 0;
 }
-

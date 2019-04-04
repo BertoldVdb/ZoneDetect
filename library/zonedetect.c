@@ -26,6 +26,8 @@
  */
 
 #include <sys/mman.h>
+#include <assert.h>
+#include <errno.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -35,6 +37,16 @@
 #include <math.h>
 
 #include "zonedetect.h"
+
+enum ZDInternalError {
+    ZD_OK,
+    ZD_E_DB_OPEN,
+    ZD_E_DB_SEEK,
+    ZD_E_DB_MMAP,
+    ZD_E_DB_MUNMAP,
+    ZD_E_DB_CLOSE,
+    ZD_E_PARSE_HEADER
+};
 
 struct ZoneDetectOpaque {
     int fd;
@@ -53,6 +65,12 @@ struct ZoneDetectOpaque {
     uint32_t metadataOffset;
     uint32_t dataOffset;
 };
+
+static void (*zdErrorHandler)(int, int);
+static void zdError(enum ZDInternalError errZD, int errNative)
+{
+    if (zdErrorHandler) zdErrorHandler((int)errZD, errNative);
+}
 
 static int32_t ZDFloatToFixedPoint(float input, float scale, unsigned int precision)
 {
@@ -373,12 +391,8 @@ void ZDCloseDatabase(ZoneDetect *library)
         if(library->notice) {
             free(library->notice);
         }
-        if(library->mapping) {
-            munmap(library->mapping, (size_t)(library->length));
-        }
-        if(library->fd >= 0) {
-            close(library->fd);
-        }
+        if(library->mapping && munmap(library->mapping, (size_t)(library->length))) zdError(ZD_E_DB_MUNMAP, errno);
+        if(library->fd >= 0 && close(library->fd))                                  zdError(ZD_E_DB_CLOSE , errno);
         free(library);
     }
 }
@@ -392,22 +406,26 @@ ZoneDetect *ZDOpenDatabase(const char *path)
 
         library->fd = open(path, O_RDONLY | O_CLOEXEC);
         if(library->fd < 0) {
+            zdError(ZD_E_DB_OPEN, errno);
             goto fail;
         }
 
         library->length = lseek(library->fd, 0, SEEK_END);
         if(library->length <= 0) {
+            zdError(ZD_E_DB_SEEK, errno);
             goto fail;
         }
         lseek(library->fd, 0, SEEK_SET);
 
         library->mapping = mmap(NULL, (size_t)library->length, PROT_READ, MAP_PRIVATE | MAP_FILE, library->fd, 0);
         if(!library->mapping) {
+            zdError(ZD_E_DB_MMAP, errno);
             goto fail;
         }
 
         /* Parse the header */
         if(ZDParseHeader(library)) {
+            zdError(ZD_E_PARSE_HEADER, 0);
             goto fail;
         }
     }
@@ -604,3 +622,26 @@ const char *ZDLookupResultToString(ZDLookupResult result)
     return "Unknown";
 }
 
+#define ZD_E_COULD_NOT(msg) "could not " msg
+
+const char *ZDGetErrorString(int errZD)
+{
+    switch ((enum ZDInternalError)errZD) {
+        default: assert(0);
+        case ZD_OK                : return "";
+        case ZD_E_DB_OPEN         : return ZD_E_COULD_NOT("open database file");
+        case ZD_E_DB_SEEK         : return ZD_E_COULD_NOT("retrieve database file size");
+        case ZD_E_DB_MMAP         : return ZD_E_COULD_NOT("map database file to system memory");
+        case ZD_E_DB_MUNMAP       : return ZD_E_COULD_NOT("unmap database");
+        case ZD_E_DB_CLOSE        : return ZD_E_COULD_NOT("close database file");
+        case ZD_E_PARSE_HEADER    : return ZD_E_COULD_NOT("parse database header");
+    }
+}
+
+#undef ZD_E_COULD_NOT
+
+int ZDSetErrorHandler(void (*handler)(int, int))
+{
+    zdErrorHandler = handler;
+    return 0;
+}
