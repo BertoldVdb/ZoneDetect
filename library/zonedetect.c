@@ -25,16 +25,20 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <sys/mman.h>
 #include <assert.h>
-#include <errno.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <fcntl.h>
-#include <unistd.h>
 #include <math.h>
+#if defined(_MSC_VER)
+  #include <windows.h>
+#else
+  #include <errno.h>
+  #include <sys/mman.h>
+  #include <fcntl.h>
+  #include <unistd.h>
+#endif
 
 #include "zonedetect.h"
 
@@ -43,14 +47,27 @@ enum ZDInternalError {
     ZD_E_DB_OPEN,
     ZD_E_DB_SEEK,
     ZD_E_DB_MMAP,
+#if defined(_MSC_VER)
+    ZD_E_DB_MMAP_MSVIEW,
+    ZD_E_DB_MAP_EXCEPTION,
+    ZD_E_DB_MUNMAP_MSVIEW,
+#endif
     ZD_E_DB_MUNMAP,
     ZD_E_DB_CLOSE,
     ZD_E_PARSE_HEADER
 };
 
 struct ZoneDetectOpaque {
+#if defined(_MSC_VER)
+    HANDLE fd;
+    HANDLE fdMap;
+    int32_t length;
+    int32_t padding;
+#else
     int fd;
     off_t length;
+#endif
+
     uint8_t *mapping;
 
     uint8_t tableType;
@@ -84,11 +101,15 @@ static unsigned int ZDDecodeVariableLengthUnsigned(const ZoneDetect *library, ui
         return 0;
     }
 
+    uint32_t value = 0;
+    unsigned int i = 0;
+#if defined(_MSC_VER)
+    __try {
+#endif
     uint8_t *const buffer = library->mapping + *index;
     uint8_t *const bufferEnd = library->mapping + library->length - 1;
 
-    uint32_t value = 0;
-    unsigned int i = 0, shift = 0;
+    unsigned int shift = 0;
     while(1) {
         value |= (uint32_t)((buffer[i] & UINT8_C(0x7F)) << shift);
         shift += 7u;
@@ -102,6 +123,14 @@ static unsigned int ZDDecodeVariableLengthUnsigned(const ZoneDetect *library, ui
             return 0;
         }
     }
+#if defined(_MSC_VER)
+    } __except(GetExceptionCode() == EXCEPTION_IN_PAGE_ERROR
+      ? EXCEPTION_EXECUTE_HANDLER
+      : EXCEPTION_CONTINUE_SEARCH) { /* file mapping SEH exception occurred */
+        zdError(ZD_E_DB_MAP_EXCEPTION, (int)GetLastError());
+        return 0;
+    }
+#endif
 
     i++;
     *result = value;
@@ -142,9 +171,20 @@ static char *ZDParseString(const ZoneDetect *library, uint32_t *index)
     char *const str = malloc(strLength + 1);
 
     if(str) {
+#if defined(_MSC_VER)
+    __try {
+#endif
         for(size_t i = 0; i < strLength; i++) {
             str[i] = (char)(library->mapping[strOffset + i] ^ UINT8_C(0x80));
         }
+#if defined(_MSC_VER)
+    } __except(GetExceptionCode() == EXCEPTION_IN_PAGE_ERROR
+      ? EXCEPTION_EXECUTE_HANDLER
+      : EXCEPTION_CONTINUE_SEARCH) { /* file mapping SEH exception occurred */
+        zdError(ZD_E_DB_MAP_EXCEPTION, (int)GetLastError());
+        return 0;
+    }
+#endif
         str[strLength] = 0;
     }
 
@@ -161,6 +201,9 @@ static int ZDParseHeader(ZoneDetect *library)
         return -1;
     }
 
+#if defined(_MSC_VER)
+    __try {
+#endif
     if(memcmp(library->mapping, "PLB", 3)) {
         return -1;
     }
@@ -169,6 +212,14 @@ static int ZDParseHeader(ZoneDetect *library)
     library->version   = library->mapping[4];
     library->precision = library->mapping[5];
     library->numFields = library->mapping[6];
+#if defined(_MSC_VER)
+    } __except(GetExceptionCode() == EXCEPTION_IN_PAGE_ERROR
+      ? EXCEPTION_EXECUTE_HANDLER
+      : EXCEPTION_CONTINUE_SEARCH) { /* file mapping SEH exception occurred */
+        zdError(ZD_E_DB_MAP_EXCEPTION, (int)GetLastError());
+        return 0;
+    }
+#endif
 
     if(library->version != 0) {
         return -1;
@@ -391,8 +442,16 @@ void ZDCloseDatabase(ZoneDetect *library)
         if(library->notice) {
             free(library->notice);
         }
+
+#if defined(_MSC_VER)
+        if(!UnmapViewOfFile(library->mapping)) zdError(ZD_E_DB_MUNMAP_MSVIEW, (int)GetLastError());
+        if(!CloseHandle(library->fdMap))       zdError(ZD_E_DB_MUNMAP       , (int)GetLastError());
+        if(!CloseHandle(library->fd))          zdError(ZD_E_DB_CLOSE        , (int)GetLastError());
+#else
         if(library->mapping && munmap(library->mapping, (size_t)(library->length))) zdError(ZD_E_DB_MUNMAP, errno);
         if(library->fd >= 0 && close(library->fd))                                  zdError(ZD_E_DB_CLOSE , errno);
+#endif
+
         free(library);
     }
 }
@@ -404,6 +463,32 @@ ZoneDetect *ZDOpenDatabase(const char *path)
     if(library) {
         memset(library, 0, sizeof(*library));
 
+#if defined(_MSC_VER)
+        library->fd = CreateFile(path, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+        if (library->fd == INVALID_HANDLE_VALUE) {
+            zdError(ZD_E_DB_OPEN, (int)GetLastError());
+            goto fail;
+        }
+
+        const DWORD fsize = GetFileSize(library->fd, NULL);
+        if (fsize == INVALID_FILE_SIZE) {
+            zdError(ZD_E_DB_SEEK, (int)GetLastError());
+            goto fail;
+        }
+        library->length = (int32_t)fsize;
+
+        library->fdMap = CreateFileMappingA(library->fd, NULL, PAGE_READONLY, 0, 0, NULL);
+        if (!library->fdMap) {
+            zdError(ZD_E_DB_MMAP, (int)GetLastError());
+            goto fail;
+        }
+
+        library->mapping = MapViewOfFile(library->fdMap, FILE_MAP_READ, 0, 0, 0);
+        if (!library->mapping) {
+            zdError(ZD_E_DB_MMAP_MSVIEW, (int)GetLastError());
+            goto fail;
+        }
+#else
         library->fd = open(path, O_RDONLY | O_CLOEXEC);
         if(library->fd < 0) {
             zdError(ZD_E_DB_OPEN, errno);
@@ -422,6 +507,7 @@ ZoneDetect *ZDOpenDatabase(const char *path)
             zdError(ZD_E_DB_MMAP, errno);
             goto fail;
         }
+#endif
 
         /* Parse the header */
         if(ZDParseHeader(library)) {
@@ -632,6 +718,11 @@ const char *ZDGetErrorString(int errZD)
         case ZD_E_DB_OPEN         : return ZD_E_COULD_NOT("open database file");
         case ZD_E_DB_SEEK         : return ZD_E_COULD_NOT("retrieve database file size");
         case ZD_E_DB_MMAP         : return ZD_E_COULD_NOT("map database file to system memory");
+#if defined(_MSC_VER)
+        case ZD_E_DB_MMAP_MSVIEW  : return ZD_E_COULD_NOT("open database file view");
+        case ZD_E_DB_MAP_EXCEPTION: return "I/O exception occurred while accessing database file view";
+        case ZD_E_DB_MUNMAP_MSVIEW: return ZD_E_COULD_NOT("close database file view");
+#endif
         case ZD_E_DB_MUNMAP       : return ZD_E_COULD_NOT("unmap database");
         case ZD_E_DB_CLOSE        : return ZD_E_COULD_NOT("close database file");
         case ZD_E_PARSE_HEADER    : return ZD_E_COULD_NOT("parse database header");
