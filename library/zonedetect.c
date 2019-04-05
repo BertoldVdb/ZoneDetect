@@ -26,6 +26,7 @@
  */
 
 #include <sys/mman.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -55,27 +56,26 @@ struct ZoneDetectOpaque {
 
 static int32_t ZDFloatToFixedPoint(float input, float scale, unsigned int precision)
 {
-    float inputScaled = input / scale;
-    return inputScaled * (float)(1 << (precision - 1));
+    const float inputScaled = input / scale;
+    return (int32_t)(inputScaled * (float)(1 << (precision - 1)));
 }
 
-static unsigned int ZDDecodeVariableLengthUnsigned(ZoneDetect *library, uint32_t *index, uint32_t *result)
+static unsigned int ZDDecodeVariableLengthUnsigned(const ZoneDetect *library, uint32_t *index, uint32_t *result)
 {
-    uint32_t value = 0;
-    unsigned int i = 0, shift = 0;
-
-    if(*index >= library->length) {
+    if(*index >= (uint32_t)library->length) {
         return 0;
     }
 
-    uint8_t *buffer = library->mapping + *index;
-    uint8_t *bufferEnd = library->mapping + library->length - 1;
+    uint8_t *const buffer = library->mapping + *index;
+    uint8_t *const bufferEnd = library->mapping + library->length - 1;
 
+    uint32_t value = 0;
+    unsigned int i = 0, shift = 0;
     while(1) {
-        value |= (buffer[i] & 0x7F) << shift;
-        shift += 7;
+        value |= (uint32_t)((buffer[i] & UINT8_C(0x7F)) << shift);
+        shift += 7u;
 
-        if(!(buffer[i] & 0x80)) {
+        if(!(buffer[i] & UINT8_C(0x80))) {
             break;
         }
 
@@ -91,15 +91,15 @@ static unsigned int ZDDecodeVariableLengthUnsigned(ZoneDetect *library, uint32_t
     return i;
 }
 
-static unsigned int ZDDecodeVariableLengthSigned(ZoneDetect *library, uint32_t *index, int32_t *result)
+static unsigned int ZDDecodeVariableLengthSigned(const ZoneDetect *library, uint32_t *index, int32_t *result)
 {
     uint32_t value = 0;
-    unsigned int retVal = ZDDecodeVariableLengthUnsigned(library, index, &value);
-    *result = (value & 1) ? -(value / 2) : (value / 2);
+    const unsigned int retVal = ZDDecodeVariableLengthUnsigned(library, index, &value);
+    *result = (value & 1) ? -(int32_t)(value / 2) : (int32_t)(value / 2);
     return retVal;
 }
 
-static char *ZDParseString(ZoneDetect *library, uint32_t *index)
+static char *ZDParseString(const ZoneDetect *library, uint32_t *index)
 {
     uint32_t strLength;
     if(!ZDDecodeVariableLengthUnsigned(library, index, &strLength)) {
@@ -121,12 +121,11 @@ static char *ZDParseString(ZoneDetect *library, uint32_t *index)
         }
     }
 
-    char *str = malloc(strLength + 1);
+    char *const str = malloc(strLength + 1);
 
     if(str) {
-        unsigned int i;
-        for(i = 0; i < strLength; i++) {
-            str[i] = library->mapping[strOffset + i] ^ 0x80;
+        for(size_t i = 0; i < strLength; i++) {
+            str[i] = (char)(library->mapping[strOffset + i] ^ UINT8_C(0x80));
         }
         str[strLength] = 0;
     }
@@ -157,11 +156,10 @@ static int ZDParseHeader(ZoneDetect *library)
         return -1;
     }
 
-    uint32_t index = 7;
+    uint32_t index = UINT32_C(7);
 
-    library->fieldNames = malloc(library->numFields * sizeof(char *));
-    unsigned int i;
-    for(i = 0; i < library->numFields; i++) {
+    library->fieldNames = malloc(library->numFields * sizeof *library->fieldNames);
+    for(size_t i = 0; i < library->numFields; i++) {
         library->fieldNames[i] = ZDParseString(library, &index);
     }
 
@@ -206,7 +204,7 @@ static int ZDPointInBox(int32_t xl, int32_t x, int32_t xr, int32_t yl, int32_t y
     return 0;
 }
 
-static ZDLookupResult ZDPointInPolygon(ZoneDetect *library, uint32_t polygonIndex, int32_t latFixedPoint, int32_t lonFixedPoint, uint64_t *distanceSqrMin)
+static ZDLookupResult ZDPointInPolygon(const ZoneDetect *library, uint32_t polygonIndex, int32_t latFixedPoint, int32_t lonFixedPoint, uint64_t *distanceSqrMin)
 {
     uint32_t numVertices;
     int32_t pointLat = 0, pointLon = 0, diffLat = 0, diffLon = 0, firstLat = 0, firstLon = 0, prevLat = 0, prevLon = 0;
@@ -218,9 +216,8 @@ static ZDLookupResult ZDPointInPolygon(ZoneDetect *library, uint32_t polygonInde
 
     int prevQuadrant = 0, winding = 0;
 
-    uint32_t i;
-    for(i = 0; i <= numVertices; i++) {
-        if(i < numVertices) {
+    for(size_t i = 0; i <= (size_t)numVertices; i++) {
+        if(i < (size_t)numVertices) {
             if(!ZDDecodeVariableLengthSigned(library, &polygonIndex, &diffLat)) return ZD_LOOKUP_PARSE_ERROR;
             if(!ZDDecodeVariableLengthSigned(library, &polygonIndex, &diffLon)) return ZD_LOOKUP_PARSE_ERROR;
             pointLat += diffLat;
@@ -279,7 +276,7 @@ static ZDLookupResult ZDPointInPolygon(ZoneDetect *library, uint32_t polygonInde
 
             /* Calculate the parameters of y=ax+b if needed */
             if(!lineIsStraight && (distanceSqrMin || windingNeedCompare)) {
-                a = ((float)pointLat - (float)prevLat) / ((float)pointLon - prevLon);
+                a = ((float)pointLat - (float)prevLat) / ((float)pointLon - (float)prevLon);
                 b = (float)pointLat - a * (float)pointLon;
             }
 
@@ -291,14 +288,14 @@ static ZDLookupResult ZDPointInPolygon(ZoneDetect *library, uint32_t polygonInde
                 }
 
                 /* Check if the target is on the border */
-                int32_t intersectLon = ((float)latFixedPoint - b) / a;
+                const int32_t intersectLon = (int32_t)(((float)latFixedPoint - b) / a);
                 if(intersectLon == lonFixedPoint) {
                     if(distanceSqrMin) *distanceSqrMin = 0;
                     return ZD_LOOKUP_ON_BORDER_SEGMENT;
                 }
 
                 /* Ok, it's not. In which direction did we go round the target? */
-                int sign = (intersectLon < lonFixedPoint) ? 2 : -2;
+                const int sign = (intersectLon < lonFixedPoint) ? 2 : -2;
                 if(quadrant == 2 || quadrant == 3) {
                     winding += sign;
                 } else {
@@ -314,32 +311,32 @@ static ZDLookupResult ZDPointInPolygon(ZoneDetect *library, uint32_t polygonInde
                     closestLat = (a * ((float)lonFixedPoint + a * (float)latFixedPoint) + b) / (a * a + 1);
                 } else {
                     if(pointLon == prevLon) {
-                        closestLon = pointLon;
-                        closestLat = latFixedPoint;
+                        closestLon = (float)pointLon;
+                        closestLat = (float)latFixedPoint;
                     } else {
-                        closestLon = lonFixedPoint;
-                        closestLat = pointLat;
+                        closestLon = (float)lonFixedPoint;
+                        closestLat = (float)pointLat;
                     }
                 }
 
-                int closestInBox = ZDPointInBox(pointLon, closestLon, prevLon, pointLat, closestLat, prevLat);
+                const int closestInBox = ZDPointInBox(pointLon, (int32_t)closestLon, prevLon, pointLat, (int32_t)closestLat, prevLat);
 
                 int64_t diffLat, diffLon;
                 if(closestInBox) {
                     /* Calculate squared distance to segment. */
-                    diffLat = closestLat - latFixedPoint;
-                    diffLon = (closestLon - lonFixedPoint);
+                    diffLat = (int64_t)(closestLat - (float)latFixedPoint);
+                    diffLon = (int64_t)(closestLon - (float)lonFixedPoint);
                 } else {
                     /*
                      * Calculate squared distance to vertices
                      * It is enough to check the current point since the polygon is closed.
                      */
-                    diffLat = pointLat - latFixedPoint;
-                    diffLon = (pointLon - lonFixedPoint);
+                    diffLat = (int64_t)(pointLat - latFixedPoint);
+                    diffLon = (int64_t)(pointLon - lonFixedPoint);
                 }
 
                 /* Note: lon has half scale */
-                uint64_t distanceSqr = diffLat * diffLat + diffLon * diffLon * 4;
+                uint64_t distanceSqr = (uint64_t)(diffLat * diffLat) + (uint64_t)(diffLon * diffLon) * 4;
                 if(distanceSqr < *distanceSqrMin) *distanceSqrMin = distanceSqr;
             }
         }
@@ -366,8 +363,7 @@ void ZDCloseDatabase(ZoneDetect *library)
 {
     if(library) {
         if(library->fieldNames) {
-            unsigned int i;
-            for(i = 0; i < library->numFields; i++) {
+            for(size_t i = 0; i < (size_t)library->numFields; i++) {
                 if(library->fieldNames[i]) {
                     free(library->fieldNames[i]);
                 }
@@ -378,7 +374,7 @@ void ZDCloseDatabase(ZoneDetect *library)
             free(library->notice);
         }
         if(library->mapping) {
-            munmap(library->mapping, library->length);
+            munmap(library->mapping, (size_t)(library->length));
         }
         if(library->fd >= 0) {
             close(library->fd);
@@ -389,7 +385,7 @@ void ZDCloseDatabase(ZoneDetect *library)
 
 ZoneDetect *ZDOpenDatabase(const char *path)
 {
-    ZoneDetect *library = (ZoneDetect *)malloc(sizeof(*library));
+    ZoneDetect *const library = malloc(sizeof *library);
 
     if(library) {
         memset(library, 0, sizeof(*library));
@@ -405,7 +401,7 @@ ZoneDetect *ZDOpenDatabase(const char *path)
         }
         lseek(library->fd, 0, SEEK_SET);
 
-        library->mapping = mmap(NULL, library->length, PROT_READ, MAP_PRIVATE | MAP_FILE, library->fd, 0);
+        library->mapping = mmap(NULL, (size_t)library->length, PROT_READ, MAP_PRIVATE | MAP_FILE, library->fd, 0);
         if(!library->mapping) {
             goto fail;
         }
@@ -423,19 +419,19 @@ fail:
     return NULL;
 }
 
-ZoneDetectResult *ZDLookup(ZoneDetect *library, float lat, float lon, float *safezone)
+ZoneDetectResult *ZDLookup(const ZoneDetect *library, float lat, float lon, float *safezone)
 {
-    int32_t latFixedPoint = ZDFloatToFixedPoint(lat, 90, library->precision);
-    int32_t lonFixedPoint = ZDFloatToFixedPoint(lon, 180, library->precision);
-    unsigned int numResults = 0;
-    uint64_t distanceSqrMin = -1;
+    const int32_t latFixedPoint = ZDFloatToFixedPoint(lat, 90, library->precision);
+    const int32_t lonFixedPoint = ZDFloatToFixedPoint(lon, 180, library->precision);
+    size_t numResults = 0;
+    uint64_t distanceSqrMin = (uint64_t)-1;
 
     /* Iterate over all polygons */
     uint32_t bboxIndex = library->bboxOffset;
-    int32_t metadataIndex = 0;
-    int32_t polygonIndex = 0;
+    uint32_t metadataIndex = 0;
+    uint32_t polygonIndex = 0;
 
-    ZoneDetectResult *results = malloc(sizeof(ZoneDetectResult));
+    ZoneDetectResult *results = malloc(sizeof *results);
     if(!results) {
         return NULL;
     }
@@ -450,7 +446,7 @@ ZoneDetectResult *ZDLookup(ZoneDetect *library, float lat, float lon, float *saf
         if(!ZDDecodeVariableLengthSigned(library, &bboxIndex, &metadataIndexDelta)) break;
         if(!ZDDecodeVariableLengthUnsigned(library, &bboxIndex, &polygonIndexDelta)) break;
 
-        metadataIndex += metadataIndexDelta;
+        metadataIndex += (uint32_t)metadataIndexDelta;
         polygonIndex += polygonIndexDelta;
 
         if(latFixedPoint >= minLat) {
@@ -460,13 +456,13 @@ ZoneDetectResult *ZDLookup(ZoneDetect *library, float lat, float lon, float *saf
 
                 /* Indices valid? */
                 if(library->metadataOffset + metadataIndex >= library->dataOffset) continue;
-                if(library->dataOffset + polygonIndex >= library->length) continue;
+                if(library->dataOffset + polygonIndex >= (uint32_t)library->length) continue;
 
-                ZDLookupResult lookupResult = ZDPointInPolygon(library, library->dataOffset + polygonIndex, latFixedPoint, lonFixedPoint, (safezone) ? &distanceSqrMin : NULL);
+                const ZDLookupResult lookupResult = ZDPointInPolygon(library, library->dataOffset + polygonIndex, latFixedPoint, lonFixedPoint, (safezone) ? &distanceSqrMin : NULL);
                 if(lookupResult == ZD_LOOKUP_PARSE_ERROR) {
                     break;
                 } else if(lookupResult != ZD_LOOKUP_NOT_IN_ZONE) {
-                    ZoneDetectResult *newResults = realloc(results, sizeof(ZoneDetectResult) * (numResults + 2));
+                    ZoneDetectResult *const newResults = realloc(results, sizeof *newResults * (numResults + 2));
 
                     if(newResults) {
                         results = newResults;
@@ -488,11 +484,10 @@ ZoneDetectResult *ZDLookup(ZoneDetect *library, float lat, float lon, float *saf
     }
 
     /* Clean up results */
-    unsigned int i, j;
-    for(i = 0; i < numResults; i++) {
+    for(size_t i = 0; i < numResults; i++) {
         int insideSum = 0;
         ZDLookupResult overrideResult = ZD_LOOKUP_IGNORE;
-        for(j = i; j < numResults; j++) {
+        for(size_t j = i; j < numResults; j++) {
             if(results[i].metaId == results[j].metaId) {
                 ZDLookupResult tmpResult = results[j].lookupResult;
                 results[j].lookupResult = ZD_LOOKUP_IGNORE;
@@ -520,8 +515,8 @@ ZoneDetectResult *ZDLookup(ZoneDetect *library, float lat, float lon, float *saf
     }
 
     /* Remove zones to ignore */
-    unsigned int newNumResults = 0;
-    for(i = 0; i < numResults; i++) {
+    size_t newNumResults = 0;
+    for(size_t i = 0; i < numResults; i++) {
         if(results[i].lookupResult != ZD_LOOKUP_IGNORE) {
             results[newNumResults] = results[i];
             newNumResults++;
@@ -530,11 +525,11 @@ ZoneDetectResult *ZDLookup(ZoneDetect *library, float lat, float lon, float *saf
     numResults = newNumResults;
 
     /* Lookup metadata */
-    for(i = 0; i < numResults; i++) {
+    for(size_t i = 0; i < numResults; i++) {
         uint32_t tmpIndex = library->metadataOffset + results[i].metaId;
-        results[i].data = malloc(library->numFields * sizeof(char *));
+        results[i].data = malloc(library->numFields * sizeof *results[i].data);
         if(results[i].data) {
-            for(j = 0; j < library->numFields; j++) {
+            for(size_t j = 0; j < library->numFields; j++) {
                 results[i].data[j] = ZDParseString(library, &tmpIndex);
             }
         }
@@ -547,7 +542,7 @@ ZoneDetectResult *ZDLookup(ZoneDetect *library, float lat, float lon, float *saf
     results[numResults].data = NULL;
 
     if(safezone) {
-        *safezone = sqrtf(distanceSqrMin) * 90 / (float)(1 << (library->precision - 1));
+        *safezone = sqrtf((float)distanceSqrMin) * 90 / (float)(1 << (library->precision - 1));
     }
 
     return results;
@@ -563,8 +558,7 @@ void ZDFreeResults(ZoneDetectResult *results)
 
     while(results[index].lookupResult != ZD_LOOKUP_END) {
         if(results[index].data) {
-            unsigned int i;
-            for(i = 0; i < results[index].numFields; i++) {
+            for(size_t i = 0; i < (size_t)results[index].numFields; i++) {
                 if(results[index].data[i]) {
                     free(results[index].data[i]);
                 }
@@ -576,12 +570,12 @@ void ZDFreeResults(ZoneDetectResult *results)
     free(results);
 }
 
-const char *ZDGetNotice(ZoneDetect *library)
+const char *ZDGetNotice(const ZoneDetect *library)
 {
     return library->notice;
 }
 
-uint8_t ZDGetTableType(ZoneDetect *library)
+uint8_t ZDGetTableType(const ZoneDetect *library)
 {
     return library->tableType;
 }
