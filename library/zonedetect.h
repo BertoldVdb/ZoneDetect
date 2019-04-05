@@ -27,8 +27,8 @@
 
 #include <stdint.h>
 
-#ifndef _ZONEDETECT_H_
-#define _ZONEDETECT_H_
+#ifndef INCL_ZONEDETECT_H_
+#define INCL_ZONEDETECT_H_
 
 typedef enum {
     ZD_LOOKUP_IGNORE = -3,
@@ -60,15 +60,15 @@ extern "C" {
 ZoneDetect *ZDOpenDatabase(const char *path);
 void        ZDCloseDatabase(ZoneDetect *library);
 
-ZoneDetectResult *ZDLookup(ZoneDetect *library, float lat, float lon, float *safezone);
+ZoneDetectResult *ZDLookup(const ZoneDetect *library, float lat, float lon, float *safezone);
 void              ZDFreeResults(ZoneDetectResult *results);
 
-const char *ZDGetNotice(ZoneDetect *library);
-uint8_t     ZDGetTableType(ZoneDetect *library);
+const char *ZDGetNotice(const ZoneDetect *library);
+uint8_t     ZDGetTableType(const ZoneDetect *library);
 const char *ZDLookupResultToString(ZDLookupResult result);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif
+#endif // INCL_ZONEDETECT_H_
