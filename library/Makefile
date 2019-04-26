@@ -31,7 +31,13 @@ STRIP=$(CCARCH)strip
 CFLAGS=-fPIC -O3 -std=gnu99 -pedantic -Wall -Wextra -Wconversion -Werror -c -fmessage-length=0 -ffunction-sections -fdata-sections
 LDFLAGS=-shared
 
-EXECUTABLE=libzonedetect.so
+ifeq ($(OS),Windows_NT)
+  EXT=dll
+else
+  EXT=so
+endif
+
+EXECUTABLE=libzonedetect.$(EXT)
 INCLUDES_SRC=zonedetect.h
 SOURCES_SRC=zonedetect.c
 
