@@ -31,7 +31,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) || defined(__MINGW32__)
   #include <windows.h>
 #else
   #include <errno.h>
@@ -47,7 +47,7 @@ enum ZDInternalError {
     ZD_E_DB_OPEN,
     ZD_E_DB_SEEK,
     ZD_E_DB_MMAP,
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) || defined(__MINGW32__)
     ZD_E_DB_MMAP_MSVIEW,
     ZD_E_DB_MAP_EXCEPTION,
     ZD_E_DB_MUNMAP_MSVIEW,
@@ -58,7 +58,7 @@ enum ZDInternalError {
 };
 
 struct ZoneDetectOpaque {
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) || defined(__MINGW32__)
     HANDLE fd;
     HANDLE fdMap;
     int32_t length;
@@ -255,7 +255,7 @@ static int ZDParseHeader(ZoneDetect *library)
     library->dataOffset += index;
 
     /* Verify file length */
-    if(tmp + library->dataOffset != library->length) {
+    if(tmp + library->dataOffset != (uint32_t)library->length) {
         return -2;
     }
 
@@ -443,7 +443,7 @@ void ZDCloseDatabase(ZoneDetect *library)
             free(library->notice);
         }
 
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) || defined(__MINGW32__)
         if(!UnmapViewOfFile(library->mapping)) zdError(ZD_E_DB_MUNMAP_MSVIEW, (int)GetLastError());
         if(!CloseHandle(library->fdMap))       zdError(ZD_E_DB_MUNMAP       , (int)GetLastError());
         if(!CloseHandle(library->fd))          zdError(ZD_E_DB_CLOSE        , (int)GetLastError());
@@ -463,7 +463,7 @@ ZoneDetect *ZDOpenDatabase(const char *path)
     if(library) {
         memset(library, 0, sizeof(*library));
 
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) || defined(__MINGW32__)
         library->fd = CreateFile(path, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
         if (library->fd == INVALID_HANDLE_VALUE) {
             zdError(ZD_E_DB_OPEN, (int)GetLastError());
@@ -718,7 +718,7 @@ const char *ZDGetErrorString(int errZD)
         case ZD_E_DB_OPEN         : return ZD_E_COULD_NOT("open database file");
         case ZD_E_DB_SEEK         : return ZD_E_COULD_NOT("retrieve database file size");
         case ZD_E_DB_MMAP         : return ZD_E_COULD_NOT("map database file to system memory");
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) || defined(__MINGW32__)
         case ZD_E_DB_MMAP_MSVIEW  : return ZD_E_COULD_NOT("open database file view");
         case ZD_E_DB_MAP_EXCEPTION: return "I/O exception occurred while accessing database file view";
         case ZD_E_DB_MUNMAP_MSVIEW: return ZD_E_COULD_NOT("close database file view");
