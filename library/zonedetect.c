@@ -141,6 +141,10 @@ static unsigned int ZDDecodeVariableLengthUnsigned(const ZoneDetect *library, ui
 static unsigned int ZDDecodeVariableLengthUnsignedReverse(const ZoneDetect *library, uint32_t *index, uint64_t *result){
     uint32_t i = *index;
 
+#if defined(_MSC_VER)
+    __try {
+#endif
+
     if(library->mapping[i] & UINT8_C(0x80)){
         printf("BUG, reverse mapping final byte is not the end of stream\n");
         return 0;
@@ -157,6 +161,15 @@ static unsigned int ZDDecodeVariableLengthUnsignedReverse(const ZoneDetect *libr
         }
         i--;
     }
+
+#if defined(_MSC_VER)
+    } __except(GetExceptionCode() == EXCEPTION_IN_PAGE_ERROR
+      ? EXCEPTION_EXECUTE_HANDLER
+      : EXCEPTION_CONTINUE_SEARCH) { /* file mapping SEH exception occurred */
+        zdError(ZD_E_DB_MAP_EXCEPTION, (int)GetLastError());
+        return 0;
+    }
+#endif
   
     *index = i;
 
@@ -253,7 +266,7 @@ static int ZDParseHeader(ZoneDetect *library)
     }
 #endif
 
-    if(library->version != 1) {
+    if(library->version >= 2) {
         return -1;
     }
 
@@ -336,62 +349,81 @@ static ZDLookupResult ZDPointInPolygon(const ZoneDetect *library, uint32_t polyg
     
     uint32_t referenceStart=0, referenceEnd=0;
     int32_t referenceDirection = 0;
-    
+   
+    uint64_t numVertices = 1;
+
+    if(library->version == 0){
+        if(!ZDDecodeVariableLengthUnsigned(library, &polygonIndex, &numVertices)) return ZD_LOOKUP_PARSE_ERROR;
+        if(numVertices > 1000000) return ZD_LOOKUP_PARSE_ERROR;
+    }
+
     do{
         uint64_t point;
         uint8_t referenceDone = 0;
-        if(!referenceDirection){
-            if(!ZDDecodeVariableLengthUnsigned(library, &polygonIndex, &point)) return ZD_LOOKUP_PARSE_ERROR;
-        }else{
-            if(referenceDirection > 0){
-                /* Read reference forward */
-                if(!ZDDecodeVariableLengthUnsigned(library, &referenceStart, &point)) return ZD_LOOKUP_PARSE_ERROR;
-                if(referenceStart >= referenceEnd){
-                    referenceDone = 1;
+        
+        if(library->version == 1){
+            if(!referenceDirection){
+                if(!ZDDecodeVariableLengthUnsigned(library, &polygonIndex, &point)) return ZD_LOOKUP_PARSE_ERROR;
+            }else{
+                if(referenceDirection > 0){
+                    /* Read reference forward */
+                    if(!ZDDecodeVariableLengthUnsigned(library, &referenceStart, &point)) return ZD_LOOKUP_PARSE_ERROR;
+                    if(referenceStart >= referenceEnd){
+                        referenceDone = 1;
+                    }
+                }else if(referenceDirection < 0){
+                    /* Read reference backwards */
+                    if(!ZDDecodeVariableLengthUnsignedReverse(library, &referenceStart, &point)) return ZD_LOOKUP_PARSE_ERROR;
+                    if(referenceStart <= referenceEnd){
+                        referenceDone = 1;
+                    }
                 }
-            }else if(referenceDirection < 0){
-                /* Read reference backwards */
-                //TODO: This code is wrong (doh)
-                if(!ZDDecodeVariableLengthUnsignedReverse(library, &referenceStart, &point)) return ZD_LOOKUP_PARSE_ERROR;
-                if(referenceStart <= referenceEnd){
-                    referenceDone = 1;
+            }
+
+            if(!point){
+                /* This is a special marker, it is not allowed in reference mode */
+                if(referenceDirection){
+                    printf("BUG, marker in reference mode?\n");
+                    return ZD_LOOKUP_PARSE_ERROR;
                 }
+    
+                uint64_t value;
+                if(!ZDDecodeVariableLengthUnsigned(library, &polygonIndex, &value)) return ZD_LOOKUP_PARSE_ERROR;
+
+                if(value == 0){
+                    done = 1;
+                }else if(value == 1){
+                    int32_t diff;
+                    int64_t start;
+                    if(!ZDDecodeVariableLengthUnsigned(library, &polygonIndex, (uint64_t*)&start)) return ZD_LOOKUP_PARSE_ERROR;
+                    if(!ZDDecodeVariableLengthSigned(library, &polygonIndex, &diff)) return ZD_LOOKUP_PARSE_ERROR;
+                
+                    referenceStart = library->dataOffset+(uint32_t)start;
+                    referenceEnd = library->dataOffset+(uint32_t)(start + diff);
+                    referenceDirection = diff;
+                    if(diff < 0){
+                        referenceStart--;
+                        referenceEnd--;
+                    }
+                    continue;
+                }
+            }else{
+                ZDDecodePoint(point, &diffLat, &diffLon);
+                if(referenceDirection < 0){
+                    diffLat = -diffLat;
+                    diffLon = -diffLon;
+                } 
             }
         }
 
-        //TODO: special marker during reference mode is an error 
-        if(!point){
-            /* This is a special marker */
-            if(referenceDirection){
-                printf("BUG, marker in reference mode?\n");
-                exit(10);
-            }
-
-            uint64_t value;
-            if(!ZDDecodeVariableLengthUnsigned(library, &polygonIndex, &value)) return ZD_LOOKUP_PARSE_ERROR;
-
-            if(value == 0){
+        if(library->version == 0){
+            numVertices--;
+            if(!numVertices){
                 done = 1;
-            }else if(value == 1){
-                int32_t diff;
-                int64_t start;
-                if(!ZDDecodeVariableLengthUnsigned(library, &polygonIndex, (uint64_t*)&start)) return ZD_LOOKUP_PARSE_ERROR;
-                if(!ZDDecodeVariableLengthSigned(library, &polygonIndex, &diff)) return ZD_LOOKUP_PARSE_ERROR;
-                
-                referenceStart = library->dataOffset+(uint32_t)start;
-                referenceEnd = library->dataOffset+(uint32_t)(start + diff);
-                referenceDirection = diff;
-                if(diff < 0){
-                    referenceStart--;
-                }
-                continue;
             }
-        }else{
-            ZDDecodePoint(point, &diffLat, &diffLon);
-            if(referenceDirection < 0){
-                diffLat = -diffLat;
-                diffLon = -diffLon;
-            }
+
+            if(!ZDDecodeVariableLengthSigned(library, &polygonIndex, &diffLat)) return ZD_LOOKUP_PARSE_ERROR;
+            if(!ZDDecodeVariableLengthSigned(library, &polygonIndex, &diffLon)) return ZD_LOOKUP_PARSE_ERROR;
         }
 
         if(!done){
