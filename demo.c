@@ -32,6 +32,7 @@
 void printResults(ZoneDetectResult *results, float safezone)
 {
     if(!results) {
+        printf("No results\n");
         return;
     }
 
