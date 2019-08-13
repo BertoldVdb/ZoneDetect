@@ -138,6 +138,34 @@ static unsigned int ZDDecodeVariableLengthUnsigned(const ZoneDetect *library, ui
     return i;
 }
 
+static unsigned int ZDDecodeVariableLengthUnsignedReverse(const ZoneDetect *library, uint32_t *index, uint64_t *result){
+    uint32_t i = *index;
+
+    if(library->mapping[i] & UINT8_C(0x80)){
+        printf("BUG, reverse mapping final byte is not the end of stream\n");
+        return 0;
+    }
+
+    if(!i){
+        return 0;
+    }
+    i--;
+
+    while(library->mapping[i] & UINT8_C(0x80)){
+        if(!i){
+            return 0;
+        }
+        i--;
+    }
+  
+    *index = i;
+
+    i++;
+
+    uint32_t i2 = i;
+    return ZDDecodeVariableLengthUnsigned(library, &i2, result);
+}
+
 static int64_t ZDDecodeUnsignedToSigned(uint64_t value){
     return (value & 1) ? -(int64_t)(value / 2) : (int64_t)(value / 2);
 }
@@ -306,20 +334,64 @@ static ZDLookupResult ZDPointInPolygon(const ZoneDetect *library, uint32_t polyg
     int prevQuadrant = 0, winding = 0;
     uint8_t done = 0, first = 1;
     
+    uint32_t referenceStart=0, referenceEnd=0;
+    int32_t referenceDirection = 0;
+    
     do{
         uint64_t point;
-        if(!ZDDecodeVariableLengthUnsigned(library, &polygonIndex, &point)) return ZD_LOOKUP_PARSE_ERROR;
+        uint8_t referenceDone = 0;
+        if(!referenceDirection){
+            if(!ZDDecodeVariableLengthUnsigned(library, &polygonIndex, &point)) return ZD_LOOKUP_PARSE_ERROR;
+        }else{
+            if(referenceDirection > 0){
+                /* Read reference forward */
+                if(!ZDDecodeVariableLengthUnsigned(library, &referenceStart, &point)) return ZD_LOOKUP_PARSE_ERROR;
+                if(referenceStart >= referenceEnd){
+                    referenceDone = 1;
+                }
+            }else if(referenceDirection < 0){
+                /* Read reference backwards */
+                //TODO: This code is wrong (doh)
+                if(!ZDDecodeVariableLengthUnsignedReverse(library, &referenceStart, &point)) return ZD_LOOKUP_PARSE_ERROR;
+                if(referenceStart <= referenceEnd){
+                    referenceDone = 1;
+                }
+            }
+        }
 
+        //TODO: special marker during reference mode is an error 
         if(!point){
             /* This is a special marker */
+            if(referenceDirection){
+                printf("BUG, marker in reference mode?\n");
+                exit(10);
+            }
+
             uint64_t value;
             if(!ZDDecodeVariableLengthUnsigned(library, &polygonIndex, &value)) return ZD_LOOKUP_PARSE_ERROR;
 
             if(value == 0){
                 done = 1;
+            }else if(value == 1){
+                int32_t diff;
+                int64_t start;
+                if(!ZDDecodeVariableLengthUnsigned(library, &polygonIndex, (uint64_t*)&start)) return ZD_LOOKUP_PARSE_ERROR;
+                if(!ZDDecodeVariableLengthSigned(library, &polygonIndex, &diff)) return ZD_LOOKUP_PARSE_ERROR;
+                
+                referenceStart = library->dataOffset+(uint32_t)start;
+                referenceEnd = library->dataOffset+(uint32_t)(start + diff);
+                referenceDirection = diff;
+                if(diff < 0){
+                    referenceStart--;
+                }
+                continue;
             }
         }else{
             ZDDecodePoint(point, &diffLat, &diffLon);
+            if(referenceDirection < 0){
+                diffLat = -diffLat;
+                diffLon = -diffLon;
+            }
         }
 
         if(!done){
@@ -330,7 +402,7 @@ static ZDLookupResult ZDPointInPolygon(const ZoneDetect *library, uint32_t polyg
                 firstLon = pointLon;
             }
         } else {
-            /* The polygons should be closed, but just in case */
+            /* Close the polygon (the closing point is not encoded) */
             pointLat = firstLat;
             pointLon = firstLon;
         }
@@ -450,6 +522,10 @@ static ZDLookupResult ZDPointInPolygon(const ZoneDetect *library, uint32_t polyg
 
         if(first){
             first = 0;
+        }
+
+        if(referenceDone){
+            referenceDirection = 0;
         }
     }while(!done);
 
