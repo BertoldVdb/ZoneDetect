@@ -84,26 +84,62 @@ int encodeVariableLength(std::vector<uint8_t>& output, int64_t valueIn, bool han
     return bytesUsed;
 }
 
+uint64_t encodePointTo64(int64_t lat, int64_t lon){
+    assert(lat || lon, "Tried to encode 0,0. This is not allowed");
+
+    uint64_t latu=encodeSignedToUnsigned(lat);
+    uint64_t lonu=encodeSignedToUnsigned(lon);
+
+    assert(latu < (uint64_t)1<<32, "Unsigned lat overflow");
+    assert(lonu < (uint64_t)1<<32, "Unsigned lat overflow");
+
+    uint64_t point = 0;
+    for(uint8_t i=31; i<=31; i--){
+        point <<= 2;
+        if(latu & (1<<i)){
+            point |= 1;
+        }
+        if(lonu & (1<<i)){
+            point |= 2;
+        }
+    }
+
+    return point;
+}
+    
 
 int64_t doubleToFixedPoint(double input, double scale, unsigned int precision = 32)
 {
-    if(input == Inf){
-        return INT64_MAX;
-    }
-    if(input == -Inf){
-	return INT64_MIN;
-    }
-
     double inputScaled = input / scale;
     return inputScaled * pow(2, precision-1);
 
 }
 
+struct Point;
+struct PolygonData;
+
+std::unordered_map<uint64_t, Point*> pointMap_;
+
 struct Point {
-    Point(double lat = 0, double lon = 0, unsigned int precision = 32)
+    static Point* GetPoint(double dlat = 0, double dlon = 0, unsigned int precision = 32){    
+	int64_t lat = doubleToFixedPoint(dlat, 90, precision);
+        int64_t lon = doubleToFixedPoint(dlon, 180, precision);
+        
+        uint64_t key = encodePointTo64(lat, lon);
+        if(pointMap_.count(key)){
+            return pointMap_[key];
+        }
+        
+        Point* p = new Point(lat, lon);
+        p->key_ = key;
+        pointMap_[key] = p;
+        return p;
+    }
+
+    Point(int64_t lat = 0, int64_t lon = 0)
     {
-        lat_ = doubleToFixedPoint(lat, 90, precision);
-        lon_ = doubleToFixedPoint(lon, 180, precision);
+        lat_ = lat;
+        lon_ = lon;   
     }
 
     std::tuple<int64_t, int64_t> value()
@@ -121,125 +157,267 @@ struct Point {
 
     int64_t lat_;
     int64_t lon_;
+    uint64_t key_;
+    PolygonData* parent_ = nullptr;
+    int index_ = 0;
+    bool encoded_ = false;
+    uint64_t encodedOffset_ = 0;
 };
 
 struct PolygonData {
     Point boundingMin;
     Point boundingMax;
-    std::vector<Point> points_;
+    std::vector<Point*> points_;
     unsigned long fileIndex_ = 0;
     unsigned long metadataId_;
+    Point* lastPoint_ = nullptr;
 
-    void processPoint(const Point& p)
+    void processPoint(Point* p)
     {
-        if(p.lat_ < boundingMin.lat_) {
-            boundingMin.lat_ = p.lat_;
+        if(p->lat_ < boundingMin.lat_) {
+            boundingMin.lat_ = p->lat_;
         }
-        if(p.lon_ < boundingMin.lon_) {
-            boundingMin.lon_ = p.lon_;
+        if(p->lon_ < boundingMin.lon_) {
+            boundingMin.lon_ = p->lon_;
         }
-        if(p.lat_ > boundingMax.lat_) {
-            boundingMax.lat_ = p.lat_;
+        if(p->lat_ > boundingMax.lat_) {
+            boundingMax.lat_ = p->lat_;
         }
-        if(p.lon_ > boundingMax.lon_) {
-            boundingMax.lon_ = p.lon_;
+        if(p->lon_ > boundingMax.lon_) {
+            boundingMax.lon_ = p->lon_;
         }
 
+	/* Don't encode duplicate points */
+	if(lastPoint_ == p){
+	    return;
+	}
+	lastPoint_ = p;
+	
         points_.push_back(p);
     }
 
     PolygonData(unsigned long id):
-        boundingMin(Inf, Inf),
-        boundingMax(-Inf, -Inf),
+        boundingMin(INT64_MAX, INT64_MAX),
+        boundingMax(INT64_MIN, INT64_MIN),
         metadataId_(id)
     {
     }
     
-    uint64_t encodePointTo64(int64_t lat, int64_t lon){
-        assert(lat || lon, "Tried to encode 0,0. This is not allowed");
 
-        uint64_t latu=encodeSignedToUnsigned(lat);
-        uint64_t lonu=encodeSignedToUnsigned(lon);
-       
-        assert(latu < (uint64_t)1<<32, "Unsigned lat overflow");
-        assert(lonu < (uint64_t)1<<32, "Unsigned lat overflow");
-
-        uint64_t point = 0;
-        for(uint8_t i=31; i<=31; i--){
-            point <<= 2;
-            if(latu & (1<<i)){
-                point |= 1;
-            }
-            if(lonu & (1<<i)){
-                point |= 2;
-            }
-        }
-
-        return point;
-    }
+    struct LineSegment {
+        std::vector<Point*> points_;
+        Point* prevPoint_;
+        PolygonData* parent_;
     
-    bool sameDirection(int64_t x1, int64_t y1, int64_t x2, int64_t y2){
-        if((x1 > 0 && x2 < 0) || (x1 < 0 && x2 > 0)){
-            return false;
-        }
-        if((y1 > 0 && y2 < 0) || (y1 < 0 && y2 > 0)){
-            return false;
+        bool sameDirection(int64_t x1, int64_t y1, int64_t x2, int64_t y2){
+            if(!x2 && !y2){
+                return false;
+            }
+
+            if((x1 > 0 && x2 < 0) || (x1 < 0 && x2 > 0)){
+                return false;
+            }        
+            if((y1 > 0 && y2 < 0) || (y1 < 0 && y2 > 0)){
+                return false;
+            }
+
+            if(x1 == 0){
+                return x2 == 0;
+            }
+
+            return y2 == (y1*x2/x1);
         }
 
-        if(x1 == 0){
-            return x2 == 0;
-        }
+    
+        void encodeDelta(std::vector<uint8_t>& output, PolygonData* mark = nullptr, int start = 0, int end = -1){
+            if(end < 0){
+                end = points_.size()-1;
+            }
 
-        return y2 == (y1*x2/x1);
-    }
+            int64_t accDiffLat = 0, accDiffLon = 0;
+            int64_t prevDiffLat = 0, prevDiffLon = 0;
+
+            int64_t prevLat, prevLon;
+            
+            Point* prevPoint = prevPoint_;
+            if(start > 0){
+                prevPoint = points_[start-1];
+            }
+
+            std::tie(prevLat, prevLon) = prevPoint->value();
+
+            auto encodePoint = [&](){
+                /* Encode accumulator.
+                 * After this the position is equal to that of the previous point */
+                if(accDiffLat || accDiffLon){
+                    encodeVariableLength(output, encodePointTo64(accDiffLat, accDiffLon), false);
+                }
+                /* Mark points as encoded if we mark and we are the parent */
+                if(mark && prevPoint->parent_ == mark){
+                    prevPoint->encoded_ = true;
+                    prevPoint->encodedOffset_ = output.size();
+                }
+
+                /* Reset accumulator */
+                accDiffLat = 0;
+                accDiffLon = 0;
+            };
+
+            for(int i = start; i<=end; i++){
+                Point* point = points_[i];
+
+                int64_t lat, lon;
+                std::tie(lat, lon) = point->value();
+
+                /* Calculate difference */
+                int64_t diffLat = lat - prevLat;
+                int64_t diffLon = lon - prevLon;
+               
+                /* Encode delta */
+                if(!sameDirection(diffLat, diffLon, prevDiffLat, prevDiffLon)){
+                    encodePoint();
+                }
+
+                accDiffLat += diffLat;
+                accDiffLon += diffLon; 
+
+                /* Store previous values */
+                prevDiffLat = diffLat;
+                prevDiffLon = diffLon;
+                prevLat = lat;
+                prevLon = lon;
+                prevPoint = point;
+            } 
+            
+            /* Encode remainder if needed */ 
+            encodePoint();
+        }
+        
+        bool encodeReference(std::vector<uint8_t>& output){
+            /* Search for first marked point */
+            int end = -1, start = -1;
+            for(int i=0; i<points_.size(); i++){
+                if(points_[i]->encoded_){
+                    start = i;
+                    break;
+                }
+            }
+            
+            for(int i=points_.size()-1; i>=0; i--){
+                if(points_[i]->encoded_){
+                    end = i;
+                    break;
+                }
+            }
+
+            if(end < 0 || start < 0){
+                /* Only unencoded points, then we can only delta encode it ourself */
+                return false;
+            }
+
+            /* Encode delta until where we can refer */
+            encodeDelta(output, nullptr, 0, start);
+            
+
+            /* Add reference marker if it is still needed */
+            if(start != end){
+                uint64_t startRef = points_[start]->encodedOffset_;
+                uint64_t endRef = points_[end]->encodedOffset_;
+
+                output.push_back(0);
+                output.push_back(1);
+                encodeVariableLength(output, startRef, false);
+                encodeVariableLength(output, endRef - startRef, true);
+            }
+
+            /* Encode delta till the end of the segment */
+            encodeDelta(output, nullptr, end+1);
+
+            return true;
+        }
+    };
 
     long encodeBinaryData(std::vector<uint8_t>& output)
     {
-        bool first = true;
-        int64_t latFixedPoint = 0, lonFixedPoint = 0;
-        int64_t latFixedPointPrev, lonFixedPointPrev;
+        std::vector<LineSegment*> lines_;
+        PolygonData* currentParent = nullptr;
+        LineSegment* segment = nullptr;
 
-        int64_t diffLatAcc = 0, diffLonAcc = 0, diffLatPrev = 0, diffLonPrev = 0;
+        /* Step 1: Encode first point */
+        Point* prevPoint = points_[0];
+        encodeVariableLength(output, prevPoint->key_, false);
 
-        for(Point point: points_){
-            /* The points should first be rounded, and then the integer value is differentiated */
-            latFixedPointPrev = latFixedPoint;
-            lonFixedPointPrev = lonFixedPoint;
-            std::tie(latFixedPoint, lonFixedPoint) = point.value();
+        int direction = 0;
+        /* Step 2: Go through the list of points and check which ones already exist.
+         * We skip the first and last one since the first one is already encoded
+         * and the last one is identical to the first */
+        for(int i=1; i<points_.size()-1; i++){
+            Point* point = points_[i];
 
-            int64_t diffLat = latFixedPoint - latFixedPointPrev;
-            int64_t diffLon = lonFixedPoint - lonFixedPointPrev;
+            if(!point->parent_){
+                point->parent_ = this;
+                point->index_ = i;
+            }
+            
+            bool newSegment = false;
 
-            if(first) {
-                /* First point is always encoded */
-                encodeVariableLength(output, encodePointTo64(latFixedPoint, lonFixedPoint), false);
-                
-                first = false;
-            } else {
-                if(!sameDirection(diffLat, diffLon, diffLatPrev, diffLonPrev)) {
-                    /* Encode accumulator */
-                    if(diffLatAcc || diffLonAcc){                
-                        encodeVariableLength(output, encodePointTo64(diffLatAcc, diffLonAcc), false);
-                        
-                        diffLatAcc = 0;
-                        diffLonAcc = 0;
+            if(point->parent_ == currentParent){
+                if(direction == 0){
+                    direction = point->index_ - prevPoint->index_;
+                    if(direction > 1 || direction < -1){
+                        newSegment = true;
+                    }
+                }else{
+                    if(point->index_ != prevPoint->index_ + direction){
+                        newSegment = true;
                     }
                 }
-                    
-                diffLatAcc += diffLat;
-                diffLonAcc += diffLon;
             }
 
-            diffLatPrev = diffLat;
-            diffLonPrev = diffLon;
+            if(point->parent_ != currentParent || newSegment){
+                if(segment){
+                    lines_.push_back(segment);
+                }
+                
+                currentParent = point->parent_;
+
+                segment = new LineSegment();
+                segment->prevPoint_ = prevPoint;
+                segment->parent_ = currentParent;
+                direction = 0;
+            }
+
+            segment->points_.push_back(point);
+
+            prevPoint = point;
         }
-        
-        /* Encode final point if needed */
-        if(diffLonAcc || diffLatAcc) {
-	    encodeVariableLength(output, encodePointTo64(diffLatAcc, diffLonAcc), false);
+        if(segment){
+            lines_.push_back(segment);
         }
 
-        /* Encode stop marker */
+        /* Step 3: Encode segments */
+        for(LineSegment* segment: lines_){
+            if(segment->parent_ == this){
+                /* If we are the parent of the segment we must encode and mark it */
+                segment->encodeDelta(output, this);
+            }else{
+                /* We are not the parent, we can encode it or refer to it, depending on 
+                 * which takes less bytes. In any case we should not mark it. */
+                std::vector<uint8_t> delta;
+                segment->encodeDelta(delta);
+                
+                std::vector<uint8_t> reference;
+                bool possible = segment->encodeReference(reference);
+
+                if(!possible || delta.size() <= reference.size()){
+                    output.insert(std::end(output), std::begin(delta), std::end(delta));
+                }else{
+                    output.insert(std::end(output), std::begin(reference), std::end(reference));
+                }
+            }
+        }
+
+        /* Step 4: Write end marker */
         output.push_back(0);
         output.push_back(0);
 
@@ -520,7 +698,7 @@ int main(int argc, char ** argv )
                     }
                 }
 
-                Point p(shapeObject->padfY[j], shapeObject->padfX[j], precision);
+                Point* p = Point::GetPoint(shapeObject->padfY[j], shapeObject->padfX[j], precision);
                 polygonData->processPoint(p);
 
             }
