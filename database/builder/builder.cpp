@@ -47,22 +47,34 @@ void errorFatal(std::string what)
     exit(1);
 }
 
-int encodeVariableLength(std::vector<uint8_t>& output, int64_t valueIn, bool handleNeg = true)
-{
+void assert(bool mustBeTrue, std::string what){
+    if(!mustBeTrue){
+        errorFatal(what);
+    }
+}
+
+uint64_t encodeSignedToUnsigned(int64_t valueIn){
     uint64_t value = valueIn * 2;
     if(valueIn < 0) {
         value = -valueIn * 2 + 1;
     }
 
-    if(!handleNeg) {
-        value = valueIn;
+    return value;
+}
+
+int encodeVariableLength(std::vector<uint8_t>& output, int64_t valueIn, bool handleNeg = true)
+{
+    uint64_t value = valueIn;
+
+    if(handleNeg) {
+        value = encodeSignedToUnsigned(valueIn);
     }
 
     int bytesUsed = 0;
     do {
         uint8_t byteOut = value & 0x7F;
         if(value >= 128) {
-            byteOut |= 0x80;
+            byteOut |= 128;
         }
         output.push_back(byteOut);
         bytesUsed ++;
@@ -72,47 +84,43 @@ int encodeVariableLength(std::vector<uint8_t>& output, int64_t valueIn, bool han
     return bytesUsed;
 }
 
+
 int64_t doubleToFixedPoint(double input, double scale, unsigned int precision = 32)
 {
+    if(input == Inf){
+        return INT64_MAX;
+    }
+    if(input == -Inf){
+	return INT64_MIN;
+    }
+
     double inputScaled = input / scale;
     return inputScaled * pow(2, precision-1);
 
 }
 
 struct Point {
-    Point(double lat = 0, double lon = 0)
+    Point(double lat = 0, double lon = 0, unsigned int precision = 32)
     {
-        lat_ = lat;
-        lon_ = lon;
+        lat_ = doubleToFixedPoint(lat, 90, precision);
+        lon_ = doubleToFixedPoint(lon, 180, precision);
     }
 
-    Point operator-(const Point& p)
+    std::tuple<int64_t, int64_t> value()
     {
-        Point result(lat_ - p.lat_, lon_ - p.lon_);
-        return result;
+        return std::make_tuple(lat_, lon_);
     }
 
-    std::tuple<int64_t, int64_t> toFixedPoint(unsigned int precision = 32)
+    int encodePointBinary(std::vector<uint8_t>& output)
     {
-        int64_t latFixedPoint = doubleToFixedPoint(lat_, 90, precision);
-        int64_t lonFixedPoint = doubleToFixedPoint(lon_, 180, precision);
-
-        return std::make_tuple(latFixedPoint, lonFixedPoint);
-    }
-
-    int encodePointBinary(std::vector<uint8_t>& output, unsigned int precision = 32)
-    {
-        int64_t latFixedPoint, lonFixedPoint;
-        std::tie(latFixedPoint, lonFixedPoint) = toFixedPoint(precision);
-
-        int bytesUsed = encodeVariableLength(output, latFixedPoint);
-        bytesUsed += encodeVariableLength(output, lonFixedPoint);
+        int bytesUsed = encodeVariableLength(output, lat_);
+        bytesUsed += encodeVariableLength(output, lon_);
 
         return bytesUsed;
     }
 
-    double lat_;
-    double lon_;
+    int64_t lat_;
+    int64_t lon_;
 };
 
 struct PolygonData {
@@ -146,50 +154,78 @@ struct PolygonData {
         metadataId_(id)
     {
     }
+    
+    uint64_t encodePointTo64(int64_t lat, int64_t lon){
+        assert(lat || lon, "Tried to encode 0,0. This is not allowed");
 
-    long encodeBinaryData(std::vector<uint8_t>& output, unsigned int precision = 20)
+        uint64_t latu=encodeSignedToUnsigned(lat);
+        uint64_t lonu=encodeSignedToUnsigned(lon);
+       
+        assert(latu < (uint64_t)1<<32, "Unsigned lat overflow");
+        assert(lonu < (uint64_t)1<<32, "Unsigned lat overflow");
+
+        uint64_t point = 0;
+        for(uint8_t i=31; i<=31; i--){
+            point <<= 2;
+            if(latu & (1<<i)){
+                point |= 1;
+            }
+            if(lonu & (1<<i)){
+                point |= 2;
+            }
+        }
+
+        return point;
+    }
+    
+    bool sameDirection(int64_t x1, int64_t y1, int64_t x2, int64_t y2){
+        if((x1 > 0 && x2 < 0) || (x1 < 0 && x2 > 0)){
+            return false;
+        }
+        if((y1 > 0 && y2 < 0) || (y1 < 0 && y2 > 0)){
+            return false;
+        }
+
+        if(x1 == 0){
+            return x2 == 0;
+        }
+
+        return y2 == (y1*x2/x1);
+    }
+
+    long encodeBinaryData(std::vector<uint8_t>& output)
     {
-        long bytesEncoded = 0;
         bool first = true;
         int64_t latFixedPoint = 0, lonFixedPoint = 0;
         int64_t latFixedPointPrev, lonFixedPointPrev;
-        uint64_t vertices = 0;
-
-        std::vector<uint8_t> tmp;
 
         int64_t diffLatAcc = 0, diffLonAcc = 0, diffLatPrev = 0, diffLonPrev = 0;
 
-        for(Point& point: points_) {
+        for(Point point: points_){
             /* The points should first be rounded, and then the integer value is differentiated */
             latFixedPointPrev = latFixedPoint;
             lonFixedPointPrev = lonFixedPoint;
-            std::tie(latFixedPoint, lonFixedPoint) = point.toFixedPoint(precision);
+            std::tie(latFixedPoint, lonFixedPoint) = point.value();
 
             int64_t diffLat = latFixedPoint - latFixedPointPrev;
             int64_t diffLon = lonFixedPoint - lonFixedPointPrev;
 
             if(first) {
                 /* First point is always encoded */
-                vertices++;
-                encodeVariableLength(tmp, latFixedPoint);
-                encodeVariableLength(tmp, lonFixedPoint);
+                encodeVariableLength(output, encodePointTo64(latFixedPoint, lonFixedPoint), false);
+                
                 first = false;
             } else {
-                /* Ignore points that are not different */
-                if(!diffLon && !diffLat) {
-                    continue;
-                }
-
-                if(diffLat != diffLatPrev || diffLon != diffLonPrev) {
+                if(!sameDirection(diffLat, diffLon, diffLatPrev, diffLonPrev)) {
                     /* Encode accumulator */
-                    vertices++;
-                    encodeVariableLength(tmp, diffLatAcc);
-                    encodeVariableLength(tmp, diffLonAcc);
-
-                    diffLatAcc = 0;
-                    diffLonAcc = 0;
+                    if(diffLatAcc || diffLonAcc){                
+                        encodeVariableLength(output, encodePointTo64(diffLatAcc, diffLonAcc), false);
+                        
+                        diffLatAcc = 0;
+                        diffLonAcc = 0;
+                    }
                 }
-
+                    
                 diffLatAcc += diffLat;
                 diffLonAcc += diffLon;
             }
@@ -197,16 +233,17 @@ struct PolygonData {
             diffLatPrev = diffLat;
             diffLonPrev = diffLon;
         }
+        
+        /* Encode final point if needed */
+        if(diffLonAcc || diffLatAcc) {
+	    encodeVariableLength(output, encodePointTo64(diffLatAcc, diffLonAcc), false);
+        }
 
-        /* Encode final point */
-        vertices++;
-        encodeVariableLength(tmp, diffLatAcc);
-        encodeVariableLength(tmp, diffLonAcc);
+        /* Encode stop marker */
+        output.push_back(0);
+        output.push_back(0);
 
-        encodeVariableLength(output, vertices, false);
-        std::copy(tmp.begin(), tmp.end(), std::back_inserter(output));
-
-        return bytesEncoded;
+        return 0;
     }
 };
 
@@ -483,7 +520,7 @@ int main(int argc, char ** argv )
                     }
                 }
 
-                Point p(shapeObject->padfY[j], shapeObject->padfX[j]);
+                Point p(shapeObject->padfY[j], shapeObject->padfX[j], precision);
                 polygonData->processPoint(p);
 
             }
@@ -510,7 +547,7 @@ int main(int argc, char ** argv )
     std::vector<uint8_t> outputData;
     for(PolygonData* polygon: polygons_) {
         polygon->fileIndex_ = outputData.size();
-        polygon->encodeBinaryData(outputData, precision);
+        polygon->encodeBinaryData(outputData);
     }
     std::cout << "Encoded data section into "<<outputData.size()<<" bytes.\n";
 
@@ -527,8 +564,8 @@ int main(int argc, char ** argv )
     int64_t prevFileIndex = 0;
     int64_t prevMetaIndex = 0;
     for(PolygonData* polygon: polygons_) {
-        polygon->boundingMin.encodePointBinary(outputBBox, precision);
-        polygon->boundingMax.encodePointBinary(outputBBox, precision);
+        polygon->boundingMin.encodePointBinary(outputBBox);
+        polygon->boundingMax.encodePointBinary(outputBBox);
 
         encodeVariableLength(outputBBox, metadata_.at(polygon->metadataId_).fileIndex_ - prevMetaIndex);
         prevMetaIndex = metadata_[polygon->metadataId_].fileIndex_;
@@ -544,7 +581,7 @@ int main(int argc, char ** argv )
     outputHeader.push_back('L');
     outputHeader.push_back('B');
     outputHeader.push_back(tableType);
-    outputHeader.push_back(0);
+    outputHeader.push_back(1);
     outputHeader.push_back(precision);
     outputHeader.push_back(fieldNames_.size());
     for(unsigned int i=0; i<fieldNames_.size(); i++) {
