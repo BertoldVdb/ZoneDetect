@@ -155,7 +155,6 @@ static unsigned int ZDDecodeVariableLengthUnsignedReverse(const ZoneDetect *libr
 #endif
 
     if(library->mapping[i] & UINT8_C(0x80)){
-        printf("BUG, reverse mapping final byte is not the end of stream\n");
         return 0;
     }
 
@@ -375,7 +374,7 @@ static int ZDReaderGetPoint(struct Reader *reader, int32_t *pointLat, int32_t *p
     int32_t diffLat = 0, diffLon = 0;
 
 readNewPoint:
-    if(reader->done){
+    if(reader->done > 1){
         return 0;
     }
 
@@ -409,7 +408,6 @@ readNewPoint:
         if(!point){
             /* This is a special marker, it is not allowed in reference mode */
             if(reader->referenceDirection){
-                printf("BUG, marker in reference mode?\n");
                 return -1;
             }
     
@@ -417,7 +415,7 @@ readNewPoint:
             if(!ZDDecodeVariableLengthUnsigned(reader->library, &reader->polygonIndex, &value)) return -1;
 
             if(value == 0){
-                reader->done = 1;
+                reader->done = 2;
             }else if(value == 1){
                 int32_t diff;
                 int64_t start;
@@ -458,6 +456,7 @@ readNewPoint:
         /* Close the polygon (the closing point is not encoded) */
         reader->pointLat = reader->firstLat;
         reader->pointLon = reader->firstLon;
+        reader->done = 2;
     }
         
     reader->first = 0;
@@ -466,6 +465,9 @@ readNewPoint:
         reader->numVertices--;
         if(!reader->numVertices){
             reader->done = 1;
+        }
+        if(!diffLat && !diffLon){
+            goto readNewPoint;
         }
     }
 
