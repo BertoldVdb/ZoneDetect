@@ -31,11 +31,11 @@
 #define INCL_ZONEDETECT_H_
 
 #if !defined(ZD_EXPORT)
-  #if defined(_MSC_VER)
-    #define ZD_EXPORT __declspec(dllimport)
-  #else
-    #define ZD_EXPORT
-  #endif
+#if defined(_MSC_VER)
+#define ZD_EXPORT __declspec(dllimport)
+#else
+#define ZD_EXPORT
+#endif
 #endif
 
 typedef enum {
