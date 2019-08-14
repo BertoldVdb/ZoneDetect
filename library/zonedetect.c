@@ -496,7 +496,7 @@ ZoneDetect *ZDOpenDatabase(const char *path)
         }
 
         library->length = lseek(library->fd, 0, SEEK_END);
-        if(library->length <= 0) {
+        if(library->length <= 0 || library->length > 50331648) {
             zdError(ZD_E_DB_SEEK, errno);
             goto fail;
         }
