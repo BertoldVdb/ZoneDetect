@@ -141,6 +141,10 @@ static unsigned int ZDDecodeVariableLengthUnsigned(const ZoneDetect *library, ui
 static unsigned int ZDDecodeVariableLengthUnsignedReverse(const ZoneDetect *library, uint32_t *index, uint64_t *result){
     uint32_t i = *index;
 
+    if(*index >= (uint32_t)library->length) {
+        return 0;
+    }
+
 #if defined(_MSC_VER)
     __try {
 #endif
