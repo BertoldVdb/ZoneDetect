@@ -29,9 +29,10 @@
 #include <stdlib.h>
 #include "zonedetect.h"
 
-void printResults(ZoneDetectResult *results, float safezone)
+void printResults(ZoneDetect *cd, ZoneDetectResult *results, float safezone)
 {
     if(!results) {
+        printf("No results\n");
         return;
     }
 
@@ -39,12 +40,22 @@ void printResults(ZoneDetectResult *results, float safezone)
     while(results[index].lookupResult != ZD_LOOKUP_END) {
         printf("%s:\n", ZDLookupResultToString(results[index].lookupResult));
         printf("  meta: %u\n", results[index].metaId);
+        printf("  polygon: %u\n", results[index].polygonId);
         if(results[index].data) {
             for(unsigned int i = 0; i < results[index].numFields; i++) {
                 if(results[index].fieldNames[i] && results[index].data[i]) {
                     printf("  %s: %s\n", results[index].fieldNames[i], results[index].data[i]);
                 }
             }
+        }
+        size_t length = 0;
+        float* list = ZDPolygonToList(cd, results[index].polygonId, &length);
+        if(list){
+            printf("Coordinate list length: %lu\n", length/2);
+            for(size_t i=0; i<length; i+=2){
+                printf("  %.04f, %0.4f\n", list[i], list[i+1]);
+            }
+            free(list);
         }
         index++;
     }
@@ -77,7 +88,7 @@ int main(int argc, char *argv[])
 
     float safezone = 0;
     ZoneDetectResult *results = ZDLookup(cd, lat, lon, &safezone);
-    printResults(results, safezone);
+    printResults(cd, results, safezone);
 
     ZDCloseDatabase(cd);
 

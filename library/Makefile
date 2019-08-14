@@ -24,9 +24,9 @@
 #SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
-CCARCH=
-CC=$(CCARCH)gcc
-STRIP=$(CCARCH)strip
+CCARCH?=
+CC?=$(CCARCH)gcc
+STRIP?=$(CCARCH)strip
 
 CFLAGS=-fPIC -O3 -std=gnu99 -pedantic -Wall -Wextra -Wconversion -Werror -c -fmessage-length=0 -ffunction-sections -fdata-sections
 LDFLAGS=-shared
