@@ -95,6 +95,11 @@ static int32_t ZDFloatToFixedPoint(float input, float scale, unsigned int precis
     return (int32_t)(inputScaled * (float)(1 << (precision - 1)));
 }
 
+static float ZDFixedPointToFloat(int32_t input, float scale, unsigned int precision){
+    const float value = (float)input / (float)(1 << (precision - 1));
+    return value * scale;
+}
+
 static unsigned int ZDDecodeVariableLengthUnsigned(const ZoneDetect *library, uint32_t *index, uint64_t *result)
 {
     if(*index >= (uint32_t)library->length) {
@@ -342,105 +347,292 @@ static void ZDDecodePoint(uint64_t point, int32_t* lat, int32_t* lon){
     *lat = (int32_t)ZDDecodeUnsignedToSigned(latu);
     *lon = (int32_t)ZDDecodeUnsignedToSigned(lonu);
 }
- 
-static ZDLookupResult ZDPointInPolygon(const ZoneDetect *library, uint32_t polygonIndex, int32_t latFixedPoint, int32_t lonFixedPoint, uint64_t *distanceSqrMin)
-{
-    int32_t pointLat = 0, pointLon = 0, diffLat = 0, diffLon = 0, firstLat = 0, firstLon = 0, prevLat = 0, prevLon = 0;
-    lonFixedPoint -= 3;
 
-    int prevQuadrant = 0, winding = 0;
-    uint8_t done = 0, first = 1;
+struct Reader{
+    const ZoneDetect *library;
+    uint32_t polygonIndex;
     
-    uint32_t referenceStart=0, referenceEnd=0;
-    int32_t referenceDirection = 0;
-   
-    uint64_t numVertices = 1;
+    uint64_t numVertices;
+    
+    uint8_t done, first;
+    uint32_t referenceStart, referenceEnd;
+    int32_t referenceDirection;
 
-    if(library->version == 0){
-        if(!ZDDecodeVariableLengthUnsigned(library, &polygonIndex, &numVertices)) return ZD_LOOKUP_PARSE_ERROR;
-        if(numVertices > 1000000) return ZD_LOOKUP_PARSE_ERROR;
+    int32_t pointLat, pointLon;
+    int32_t firstLat, firstLon;
+};
+
+static void ZDReaderInit(struct Reader *reader, const ZoneDetect *library, uint32_t polygonIndex){
+    memset(reader, 0, sizeof(*reader));
+
+    reader->library = library;
+    reader->polygonIndex = polygonIndex;
+
+    reader->first = 1;
+}
+
+static int ZDReaderGetPoint(struct Reader *reader, int32_t *pointLat, int32_t *pointLon){
+    int32_t diffLat = 0, diffLon = 0;
+
+readNewPoint:
+    if(reader->done){
+        return 0;
     }
 
-    do{
-        uint64_t point;
-        uint8_t referenceDone = 0;
+    if(reader->first && reader->library->version == 0){
+        if(!ZDDecodeVariableLengthUnsigned(reader->library, &reader->polygonIndex, &reader->numVertices)) return -1;
+        if(!reader->numVertices) return -1;
+    }
+
+    uint64_t point;
+    uint8_t referenceDone = 0;
         
-        if(library->version == 1){
-            if(!referenceDirection){
-                if(!ZDDecodeVariableLengthUnsigned(library, &polygonIndex, &point)) return ZD_LOOKUP_PARSE_ERROR;
-            }else{
-                if(referenceDirection > 0){
-                    /* Read reference forward */
-                    if(!ZDDecodeVariableLengthUnsigned(library, &referenceStart, &point)) return ZD_LOOKUP_PARSE_ERROR;
-                    if(referenceStart >= referenceEnd){
-                        referenceDone = 1;
-                    }
-                }else if(referenceDirection < 0){
-                    /* Read reference backwards */
-                    if(!ZDDecodeVariableLengthUnsignedReverse(library, &referenceStart, &point)) return ZD_LOOKUP_PARSE_ERROR;
-                    if(referenceStart <= referenceEnd){
-                        referenceDone = 1;
-                    }
+    if(reader->library->version == 1){
+        if(!reader->referenceDirection){
+            if(!ZDDecodeVariableLengthUnsigned(reader->library, &reader->polygonIndex, &point)) return -1;
+        }else{
+            if(reader->referenceDirection > 0){
+                /* Read reference forward */
+                if(!ZDDecodeVariableLengthUnsigned(reader->library, &reader->referenceStart, &point)) return -1;
+                if(reader->referenceStart >= reader->referenceEnd){
+                    referenceDone = 1;
+                }
+            }else if(reader->referenceDirection < 0){
+                /* Read reference backwards */
+                if(!ZDDecodeVariableLengthUnsignedReverse(reader->library, &reader->referenceStart, &point)) return -1;
+                if(reader->referenceStart <= reader->referenceEnd){
+                    referenceDone = 1;
                 }
             }
+        }
 
-            if(!point){
-                /* This is a special marker, it is not allowed in reference mode */
-                if(referenceDirection){
-                    printf("BUG, marker in reference mode?\n");
-                    return ZD_LOOKUP_PARSE_ERROR;
-                }
+        if(!point){
+            /* This is a special marker, it is not allowed in reference mode */
+            if(reader->referenceDirection){
+                printf("BUG, marker in reference mode?\n");
+                return -1;
+            }
     
-                uint64_t value;
-                if(!ZDDecodeVariableLengthUnsigned(library, &polygonIndex, &value)) return ZD_LOOKUP_PARSE_ERROR;
+            uint64_t value;
+            if(!ZDDecodeVariableLengthUnsigned(reader->library, &reader->polygonIndex, &value)) return -1;
 
-                if(value == 0){
-                    done = 1;
-                }else if(value == 1){
-                    int32_t diff;
-                    int64_t start;
-                    if(!ZDDecodeVariableLengthUnsigned(library, &polygonIndex, (uint64_t*)&start)) return ZD_LOOKUP_PARSE_ERROR;
-                    if(!ZDDecodeVariableLengthSigned(library, &polygonIndex, &diff)) return ZD_LOOKUP_PARSE_ERROR;
-                
-                    referenceStart = library->dataOffset+(uint32_t)start;
-                    referenceEnd = library->dataOffset+(uint32_t)(start + diff);
-                    referenceDirection = diff;
-                    if(diff < 0){
-                        referenceStart--;
-                        referenceEnd--;
-                    }
-                    continue;
+            if(value == 0){
+                reader->done = 1;
+            }else if(value == 1){
+                int32_t diff;
+                int64_t start;
+                if(!ZDDecodeVariableLengthUnsigned(reader->library, &reader->polygonIndex, (uint64_t*)&start)) return -1;
+                if(!ZDDecodeVariableLengthSigned(reader->library, &reader->polygonIndex, &diff)) return -1;
+              
+                reader->referenceStart = reader->library->dataOffset+(uint32_t)start;
+                reader->referenceEnd = reader->library->dataOffset+(uint32_t)(start + diff);
+                reader->referenceDirection = diff;
+                if(diff < 0){
+                    reader->referenceStart--;
+                    reader->referenceEnd--;
                 }
-            }else{
-                ZDDecodePoint(point, &diffLat, &diffLon);
-                if(referenceDirection < 0){
-                    diffLat = -diffLat;
-                    diffLon = -diffLon;
-                } 
+                goto readNewPoint;
+            }
+        }else{
+            ZDDecodePoint(point, &diffLat, &diffLon);
+            if(reader->referenceDirection < 0){
+                diffLat = -diffLat;
+                diffLon = -diffLon;
+            } 
+        }
+    }
+
+    if(reader->library->version == 0){
+        if(!ZDDecodeVariableLengthSigned(reader->library, &reader->polygonIndex, &diffLat)) return -1;
+        if(!ZDDecodeVariableLengthSigned(reader->library, &reader->polygonIndex, &diffLon)) return -1;
+    }
+
+    if(!reader->done){
+        reader->pointLat += diffLat;
+        reader->pointLon += diffLon;
+        if(reader->first) {
+            reader->firstLat = reader->pointLat;
+            reader->firstLon = reader->pointLon;
+        }
+    } else {
+        /* Close the polygon (the closing point is not encoded) */
+        reader->pointLat = reader->firstLat;
+        reader->pointLon = reader->firstLon;
+    }
+        
+    reader->first = 0;
+
+    if(reader->library->version == 0){
+        reader->numVertices--;
+        if(!reader->numVertices){
+            reader->done = 1;
+        }
+    }
+
+    if(referenceDone){
+        reader->referenceDirection = 0;
+    }
+
+    if(pointLat){
+        *pointLat = reader->pointLat;
+    }
+
+    if(pointLon){
+        *pointLon = reader->pointLon;
+    }
+
+    return 1;
+}
+
+static int ZDFindPolygon(const ZoneDetect *library, uint32_t wantedId, uint32_t* metadataIndexPtr, uint32_t* polygonIndexPtr){
+    uint32_t polygonId = 0;
+    uint32_t bboxIndex = library->bboxOffset;
+
+    uint32_t metadataIndex = 0, polygonIndex = 0;
+    
+    while(bboxIndex < library->metadataOffset) {
+        uint64_t polygonIndexDelta;
+        int32_t metadataIndexDelta;
+        int32_t tmp;
+        if(!ZDDecodeVariableLengthSigned(library, &bboxIndex, &tmp)) break;
+        if(!ZDDecodeVariableLengthSigned(library, &bboxIndex, &tmp)) break;
+        if(!ZDDecodeVariableLengthSigned(library, &bboxIndex, &tmp)) break;
+        if(!ZDDecodeVariableLengthSigned(library, &bboxIndex, &tmp)) break;
+        if(!ZDDecodeVariableLengthSigned(library, &bboxIndex, &metadataIndexDelta)) break;
+        if(!ZDDecodeVariableLengthUnsigned(library, &bboxIndex, &polygonIndexDelta)) break;
+
+        metadataIndex += (uint32_t)metadataIndexDelta;
+        polygonIndex += (uint32_t)polygonIndexDelta;
+
+        if(polygonId == wantedId){
+            if(metadataIndexPtr){
+                metadataIndex += library->metadataOffset;
+                *metadataIndexPtr = metadataIndex;
+            }
+            if(polygonIndexPtr){
+                polygonIndex += library->dataOffset;
+                *polygonIndexPtr = polygonIndex;
+            }
+            return 1;
+        }
+
+        polygonId ++;
+    }
+
+    return 0;
+}
+
+static int32_t* ZDPolygonToListInternal(const ZoneDetect *library, uint32_t polygonIndex, size_t* length){
+    struct Reader reader;
+    ZDReaderInit(&reader, library, polygonIndex);
+
+    size_t listLength = 2 * 100;
+    size_t listIndex = 0;
+
+    int32_t* list = malloc(sizeof(int32_t) * listLength);
+    if(!list){
+        goto fail;
+    }
+
+    while(1){
+        int32_t pointLat, pointLon;
+        int result = ZDReaderGetPoint(&reader, &pointLat, &pointLon);
+        if(result < 0){
+            goto fail;
+        }else if(result == 0){
+            break;
+        }
+
+        if(listIndex >= listLength){
+            listLength *= 2;
+            if(listLength >= 1048576){
+                goto fail;
+            }
+
+            list = realloc(list, sizeof(int32_t) * listLength);
+            if(!list){
+                goto fail;
             }
         }
 
-        if(library->version == 0){
-            numVertices--;
-            if(!numVertices){
-                done = 1;
-            }
+        list[listIndex++] = pointLat;
+        list[listIndex++] = pointLon;
+    }
 
-            if(!ZDDecodeVariableLengthSigned(library, &polygonIndex, &diffLat)) return ZD_LOOKUP_PARSE_ERROR;
-            if(!ZDDecodeVariableLengthSigned(library, &polygonIndex, &diffLon)) return ZD_LOOKUP_PARSE_ERROR;
-        }
+    if(length){
+        *length = listIndex;
+    }
 
-        if(!done){
-            pointLat += diffLat;
-            pointLon += diffLon;
-            if(first) {
-                firstLat = pointLat;
-                firstLon = pointLon;
-            }
-        } else {
-            /* Close the polygon (the closing point is not encoded) */
-            pointLat = firstLat;
-            pointLon = firstLon;
+    return list;
+
+fail:
+    if(list){
+        free(list);
+    }
+    return NULL;
+}
+
+float* ZDPolygonToList(const ZoneDetect *library, uint32_t polygonId, size_t* lengthPtr){
+    uint32_t polygonIndex;
+    int32_t* data = NULL;
+    float* flData = NULL;
+
+    if(!ZDFindPolygon(library, polygonId, NULL, &polygonIndex)){
+        goto fail;
+    }
+
+    size_t length = 0;
+    data = ZDPolygonToListInternal(library, polygonIndex, &length);
+
+    if(!data){
+        goto fail;
+    }
+
+    flData = malloc(sizeof(float) * length);
+    if(!flData){
+       goto fail;
+    } 
+
+    for(size_t i = 0; i<length; i+= 2){
+        int32_t lat = data[i];
+        int32_t lon = data[i+1];
+
+        flData[i] = ZDFixedPointToFloat(lat, 90, library->precision);
+        flData[i+1] = ZDFixedPointToFloat(lon, 180, library->precision);
+    }
+
+    if(lengthPtr){
+        *lengthPtr = length;
+    }
+
+    return flData;
+
+fail:
+    if(data){
+        free(data);
+    }
+    if(flData){
+        free(flData);
+    }
+    return NULL;
+}
+
+static ZDLookupResult ZDPointInPolygon(const ZoneDetect *library, uint32_t polygonIndex, int32_t latFixedPoint, int32_t lonFixedPoint, uint64_t *distanceSqrMin)
+{
+    int32_t pointLat, pointLon, prevLat = 0, prevLon = 0;
+    int prevQuadrant = 0, winding = 0;
+    
+    uint8_t first = 1;
+
+    struct Reader reader;
+    ZDReaderInit(&reader, library, polygonIndex);
+
+    while(1){
+        int result = ZDReaderGetPoint(&reader, &pointLat, &pointLon);
+        if(result < 0){
+            return ZD_LOOKUP_PARSE_ERROR; 
+        }else if(result == 0){
+            break;
         }
 
         /* Check if point is ON the border */
@@ -555,15 +747,8 @@ static ZDLookupResult ZDPointInPolygon(const ZoneDetect *library, uint32_t polyg
         prevQuadrant = quadrant;
         prevLat = pointLat;
         prevLon = pointLon;
-
-        if(first){
-            first = 0;
-        }
-
-        if(referenceDone){
-            referenceDirection = 0;
-        }
-    }while(!done);
+        first = 0;
+    };
 
     if(winding == -4) {
         return ZD_LOOKUP_IN_ZONE;
@@ -690,6 +875,8 @@ ZoneDetectResult *ZDLookup(const ZoneDetect *library, float lat, float lon, floa
         return NULL;
     }
 
+    uint32_t polygonId = 0;
+    
     while(bboxIndex < library->metadataOffset) {
         int32_t minLat, minLon, maxLat, maxLon, metadataIndexDelta;
         uint64_t polygonIndexDelta;
@@ -720,6 +907,7 @@ ZoneDetectResult *ZDLookup(const ZoneDetect *library, float lat, float lon, floa
 
                     if(newResults) {
                         results = newResults;
+                        results[numResults].polygonId = polygonId;
                         results[numResults].metaId = metadataIndex;
                         results[numResults].numFields = library->numFields;
                         results[numResults].fieldNames = library->fieldNames;
@@ -735,6 +923,8 @@ ZoneDetectResult *ZDLookup(const ZoneDetect *library, float lat, float lon, floa
             /* The data is sorted along minLat */
             break;
         }
+
+        polygonId++;
     }
 
     /* Clean up results */
