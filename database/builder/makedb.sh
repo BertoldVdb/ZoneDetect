@@ -10,6 +10,7 @@ mkdir -p naturalearth; cd naturalearth
 cd ..
 ./builder C naturalearth/ne_10m_admin_0_countries_lakes ./out/country16.bin 16 "Made with Natural Earth, placed in the Public Domain."
 ./builder C naturalearth/ne_10m_admin_0_countries_lakes ./out/country21.bin 21 "Made with Natural Earth, placed in the Public Domain."
+./builder C naturalearth/ne_10m_admin_0_countries_lakes ./out/country9.bin 9 "Made with Natural Earth, placed in the Public Domain."
 
 mkdir timezone; cd timezone
 #wget https://github.com/evansiroky/timezone-boundary-builder/releases/download/2018i/timezones.shapefile.zip

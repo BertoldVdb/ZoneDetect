@@ -52,6 +52,7 @@ typedef enum {
 typedef struct {
     ZDLookupResult lookupResult;
 
+    uint32_t polygonId;
     uint32_t metaId;
     uint8_t numFields;
     char **fieldNames;
@@ -77,6 +78,8 @@ ZD_EXPORT const char *ZDLookupResultToString(ZDLookupResult result);
 
 ZD_EXPORT int         ZDSetErrorHandler(void (*handler)(int, int));
 ZD_EXPORT const char *ZDGetErrorString(int errZD);
+
+ZD_EXPORT float* ZDPolygonToList(const ZoneDetect *library, uint32_t polygonId, size_t* length);
 
 #ifdef __cplusplus
 }
