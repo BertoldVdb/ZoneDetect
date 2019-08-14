@@ -31,11 +31,11 @@
 #define INCL_ZONEDETECT_H_
 
 #if !defined(ZD_EXPORT)
-  #if defined(_MSC_VER)
-    #define ZD_EXPORT __declspec(dllimport)
-  #else
-    #define ZD_EXPORT
-  #endif
+#if defined(_MSC_VER)
+#define ZD_EXPORT __declspec(dllimport)
+#else
+#define ZD_EXPORT
+#endif
 #endif
 
 typedef enum {
@@ -52,6 +52,7 @@ typedef enum {
 typedef struct {
     ZDLookupResult lookupResult;
 
+    uint32_t polygonId;
     uint32_t metaId;
     uint8_t numFields;
     char **fieldNames;
@@ -77,6 +78,8 @@ ZD_EXPORT const char *ZDLookupResultToString(ZDLookupResult result);
 
 ZD_EXPORT int         ZDSetErrorHandler(void (*handler)(int, int));
 ZD_EXPORT const char *ZDGetErrorString(int errZD);
+
+ZD_EXPORT float* ZDPolygonToList(const ZoneDetect *library, uint32_t polygonId, size_t* length);
 
 #ifdef __cplusplus
 }
