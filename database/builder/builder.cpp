@@ -36,6 +36,8 @@
 #include <math.h>
 #include <tuple>
 
+unsigned version = 1;
+
 const double Inf = std::numeric_limits<float>::infinity();
 
 std::unordered_map<std::string, std::string> alpha2ToName;
@@ -229,7 +231,8 @@ struct PolygonData {
         }
 
     
-        void encodeDelta(std::vector<uint8_t>& output, PolygonData* mark = nullptr, int start = 0, int end = -1){
+        unsigned int encodeDelta(std::vector<uint8_t>& output, PolygonData* mark = nullptr, int start = 0, int end = -1){
+            unsigned int numPoints = 0;
             if(end < 0){
                 end = points_.size()-1;
             }
@@ -246,12 +249,20 @@ struct PolygonData {
 
             std::tie(prevLat, prevLon) = prevPoint->value();
 
-            auto encodePoint = [&](){
+            auto encodePoint = [&](bool force = false){
                 /* Encode accumulator.
                  * After this the position is equal to that of the previous point */
-                if(accDiffLat || accDiffLon){
-                    encodeVariableLength(output, encodePointTo64(accDiffLat, accDiffLon), false);
+                if(accDiffLat || accDiffLon || force){
+                    if(version == 0){
+                        encodeVariableLength(output, accDiffLat);
+                        encodeVariableLength(output, accDiffLon);
+                    }else{
+                        encodeVariableLength(output, encodePointTo64(accDiffLat, accDiffLon), false);
+                    }
+
+                    numPoints++;
                 }
+
                 /* Mark points as encoded if we mark and we are the parent */
                 if(mark && prevPoint->parent_ == mark){
                     prevPoint->encoded_ = true;
@@ -290,7 +301,9 @@ struct PolygonData {
             } 
             
             /* Encode remainder if needed */ 
-            encodePoint();
+            encodePoint(version == 0);
+
+            return numPoints;
         }
         
         bool encodeReference(std::vector<uint8_t>& output){
@@ -327,7 +340,8 @@ struct PolygonData {
                 output.push_back(0);
                 output.push_back(1);
                 encodeVariableLength(output, startRef, false);
-                encodeVariableLength(output, endRef - startRef, true);
+                int64_t diff = endRef - startRef;
+                encodeVariableLength(output, diff, true);
             }
 
             /* Encode delta till the end of the segment */
@@ -337,7 +351,7 @@ struct PolygonData {
         }
     };
 
-    long encodeBinaryData(std::vector<uint8_t>& output)
+    unsigned int encodeBinaryData(std::vector<uint8_t>& output)
     {
         std::vector<LineSegment*> lines_;
         PolygonData* currentParent = nullptr;
@@ -345,7 +359,11 @@ struct PolygonData {
 
         /* Step 1: Encode first point */
         Point* prevPoint = points_[0];
-        encodeVariableLength(output, prevPoint->key_, false);
+        if(version == 0){
+            prevPoint->encodePointBinary(output);
+        }else{
+            encodeVariableLength(output, prevPoint->key_, false);
+        }
 
         int direction = 0;
         /* Step 2: Go through the list of points and check which ones already exist.
@@ -395,11 +413,13 @@ struct PolygonData {
             lines_.push_back(segment);
         }
 
+        unsigned int v0Points = 1;
+
         /* Step 3: Encode segments */
         for(LineSegment* segment: lines_){
-            if(segment->parent_ == this){
+            if(segment->parent_ == this || version == 0){
                 /* If we are the parent of the segment we must encode and mark it */
-                segment->encodeDelta(output, this);
+                v0Points += segment->encodeDelta(output, this);
             }else{
                 /* We are not the parent, we can encode it or refer to it, depending on 
                  * which takes less bytes. In any case we should not mark it. */
@@ -417,11 +437,13 @@ struct PolygonData {
             }
         }
 
-        /* Step 4: Write end marker */
-        output.push_back(0);
-        output.push_back(0);
+        if (version != 0){
+            /* Step 4: Write end marker */
+            output.push_back(0);
+            output.push_back(0);
+        }
 
-        return 0;
+        return v0Points;
     }
 };
 
@@ -622,7 +644,7 @@ std::unordered_map<std::string, std::string> parseTimezoneToAlpha2(std::string p
 
 int main(int argc, char ** argv )
 {
-    if(argc != 6) {
+    if(argc != 7) {
         std::cout << "Wrong number of parameters\n";
         return 1;
     }
@@ -634,6 +656,11 @@ int main(int argc, char ** argv )
     std::string outPath = argv[3];
     unsigned int precision = strtol(argv[4], NULL, 10);
     std::string notice = argv[5];
+    version = strtol(argv[6], NULL, 10);
+    if(version > 1){
+        std::cout << "Unknown version\n";
+        return 1;
+    }
 
     DBFHandle dataHandle = DBFOpen("naturalearth/ne_10m_admin_0_countries_lakes", "rb" );
     alpha2ToName = parseAlpha2ToName(dataHandle);
@@ -725,7 +752,14 @@ int main(int argc, char ** argv )
     std::vector<uint8_t> outputData;
     for(PolygonData* polygon: polygons_) {
         polygon->fileIndex_ = outputData.size();
-        polygon->encodeBinaryData(outputData);
+        if(version == 0){
+            std::vector<uint8_t> tmpData;
+            unsigned int numPoints = polygon->encodeBinaryData(tmpData);
+            encodeVariableLength(outputData, numPoints, false);
+            outputData.insert(std::end(outputData), std::begin(tmpData), std::end(tmpData));
+        }else{
+            polygon->encodeBinaryData(outputData);
+        }
     }
     std::cout << "Encoded data section into "<<outputData.size()<<" bytes.\n";
 
@@ -759,7 +793,7 @@ int main(int argc, char ** argv )
     outputHeader.push_back('L');
     outputHeader.push_back('B');
     outputHeader.push_back(tableType);
-    outputHeader.push_back(1);
+    outputHeader.push_back(version);
     outputHeader.push_back(precision);
     outputHeader.push_back(fieldNames_.size());
     for(unsigned int i=0; i<fieldNames_.size(); i++) {
