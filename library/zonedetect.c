@@ -895,10 +895,6 @@ ZoneDetectResult *ZDLookup(const ZoneDetect *library, float lat, float lon, floa
                     lonFixedPoint >= minLon &&
                     lonFixedPoint <= maxLon) {
 
-                /* Indices valid? */
-                if(library->metadataOffset + metadataIndex >= library->dataOffset) continue;
-                if(library->dataOffset + polygonIndex >= (uint32_t)library->length) continue;
-
                 const ZDLookupResult lookupResult = ZDPointInPolygon(library, library->dataOffset + polygonIndex, latFixedPoint, lonFixedPoint, (safezone) ? &distanceSqrMin : NULL);
                 if(lookupResult == ZD_LOOKUP_PARSE_ERROR) {
                     break;
