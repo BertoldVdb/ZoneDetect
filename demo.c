@@ -48,7 +48,8 @@ void printResults(ZoneDetect *cd, ZoneDetectResult *results, float safezone)
                 }
             }
         }
-        size_t length = 0;
+	if(0){
+  	size_t length = 0;
         float* list = ZDPolygonToList(cd, results[index].polygonId, &length);
         if(list){
             printf("Coordinate list length: %lu\n", length/2);
@@ -57,6 +58,7 @@ void printResults(ZoneDetect *cd, ZoneDetectResult *results, float safezone)
             }
             free(list);
         }
+	}
         index++;
     }
     ZDFreeResults(results);
