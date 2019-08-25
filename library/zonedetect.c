@@ -224,7 +224,7 @@ static char *ZDParseString(const ZoneDetect *library, uint32_t *index)
         }
     }
 
-    char *const str = malloc(strLength + 1);
+    char *const str = malloc((size_t)(strLength + 1));
 
     if(str) {
 #if defined(_MSC_VER)
