@@ -55,3 +55,8 @@ obj/%.o: src/%.c $(INCLUDES_SRC)
 
 clean:
 	rm -rf $(OBJECTS_OBJ) $(EXECUTABLE)
+
+install:
+	cp zonedetect.h /usr/include/
+	cp $(EXECUTABLE) /usr/lib/
+	ldconfig
