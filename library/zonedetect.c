@@ -329,26 +329,21 @@ static int ZDPointInBox(int32_t xl, int32_t x, int32_t xr, int32_t yl, int32_t y
     return 0;
 }
 
+static uint32_t ZDUnshuffle(uint64_t w)
+{
+    w &=                  0x5555555555555555;
+    w = (w | (w >> 1))  & 0x3333333333333333;
+    w = (w | (w >> 2))  & 0x0F0F0F0F0F0F0F0F;
+    w = (w | (w >> 4))  & 0x00FF00FF00FF00FF;
+    w = (w | (w >> 8))  & 0x0000FFFF0000FFFF;
+    w = (w | (w >> 16)) & 0x00000000FFFFFFFF;
+    return (uint32_t)w;
+}
+
 static void ZDDecodePoint(uint64_t point, int32_t* lat, int32_t* lon)
 {
-    uint64_t latu = 0;
-    uint64_t lonu = 0;
-
-    for(uint64_t i=0; i<32; i++) {
-        latu <<= 1;
-        lonu <<= 1;
-
-        if((point >> (2*(31-i))) & 1) {
-            latu |= 1;
-        }
-
-        if((point >> (2*(31-i)+1)) & 1) {
-            lonu |= 1;
-        }
-    }
-
-    *lat = (int32_t)ZDDecodeUnsignedToSigned(latu);
-    *lon = (int32_t)ZDDecodeUnsignedToSigned(lonu);
+    *lat = (int32_t)ZDDecodeUnsignedToSigned(ZDUnshuffle(point));
+    *lon = (int32_t)ZDDecodeUnsignedToSigned(ZDUnshuffle(point >> 1));
 }
 
 struct Reader {
@@ -389,10 +384,11 @@ readNewPoint:
         if(!reader->numVertices) return -1;
     }
 
-    uint64_t point;
     uint8_t referenceDone = 0;
 
     if(reader->library->version == 1) {
+        uint64_t point;
+
         if(!reader->referenceDirection) {
             if(!ZDDecodeVariableLengthUnsigned(reader->library, &reader->polygonIndex, &point)) return -1;
         } else {
