@@ -786,9 +786,9 @@ void ZDCloseDatabase(ZoneDetect *library)
         }
 
 #if defined(_MSC_VER) || defined(__MINGW32__)
-        if(!UnmapViewOfFile(library->mapping)) zdError(ZD_E_DB_MUNMAP_MSVIEW, (int)GetLastError());
-        if(!CloseHandle(library->fdMap))       zdError(ZD_E_DB_MUNMAP       , (int)GetLastError());
-        if(!CloseHandle(library->fd))          zdError(ZD_E_DB_CLOSE        , (int)GetLastError());
+        if(library->mapping && !UnmapViewOfFile(library->mapping)) zdError(ZD_E_DB_MUNMAP_MSVIEW, (int)GetLastError());
+        if(library->fdMap && !CloseHandle(library->fdMap))         zdError(ZD_E_DB_MUNMAP       , (int)GetLastError());
+        if(library->fd && !CloseHandle(library->fd))               zdError(ZD_E_DB_CLOSE        , (int)GetLastError());
 #else
         if(library->mapping && munmap(library->mapping, (size_t)(library->length))) zdError(ZD_E_DB_MUNMAP, errno);
         if(library->fd >= 0 && close(library->fd))                                  zdError(ZD_E_DB_CLOSE , errno);
