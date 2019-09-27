@@ -60,3 +60,11 @@ install:
 	cp zonedetect.h /usr/include/
 	cp $(EXECUTABLE) /usr/lib/
 	ldconfig
+
+nice:
+	mkdir -p bak/
+	touch $(addsuffix .orig,$(INCLUDES_SRC))
+	touch $(addsuffix .orig,$(SOURCES_SRC))
+	astyle --style=k/r --indent=spaces=4 --indent-cases --indent-switches  $(INCLUDES_SRC) $(SOURCES_SRC)
+	mv $(addsuffix .orig,$(INCLUDES_SRC)) bak/
+	mv $(addsuffix .orig,$(SOURCES_SRC)) bak/

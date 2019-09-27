@@ -1,3 +1,4 @@
+
 /*
  * Copyright (c) 2018, Bertold Van den Bergh (vandenbergh@bertold.org)
  * All rights reserved.
@@ -91,6 +92,8 @@ int main(int argc, char *argv[])
     float safezone = 0;
     ZoneDetectResult *results = ZDLookup(cd, lat, lon, &safezone);
     printResults(cd, results, safezone);
+
+    printf("The simple string is [%s]\n", ZDHelperSimpleLookupString(cd, lat, lon));
 
     ZDCloseDatabase(cd);
 
