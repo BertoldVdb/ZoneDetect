@@ -67,6 +67,7 @@ extern "C" {
 #endif
 
 ZD_EXPORT ZoneDetect *ZDOpenDatabase(const char *path);
+ZD_EXPORT ZoneDetect *ZDOpenDatabaseFromMemory(void* buffer, size_t length);
 ZD_EXPORT void        ZDCloseDatabase(ZoneDetect *library);
 
 ZD_EXPORT ZoneDetectResult *ZDLookup(const ZoneDetect *library, float lat, float lon, float *safezone);
@@ -80,6 +81,8 @@ ZD_EXPORT int         ZDSetErrorHandler(void (*handler)(int, int));
 ZD_EXPORT const char *ZDGetErrorString(int errZD);
 
 ZD_EXPORT float* ZDPolygonToList(const ZoneDetect *library, uint32_t polygonId, size_t* length);
+
+ZD_EXPORT char* ZDHelperLookupString(const ZoneDetect* library, float lat, float lon);
 
 #ifdef __cplusplus
 }

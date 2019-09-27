@@ -27,6 +27,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "zonedetect.h"
 
 void printResults(ZoneDetect *cd, ZoneDetectResult *results, float safezone)
@@ -73,6 +74,7 @@ void onError(int errZD, int errNative)
     fprintf(stderr, "ZD error: %s (0x%08X)\n", ZDGetErrorString(errZD), (unsigned)errNative);
 }
 
+
 int main(int argc, char *argv[])
 {
     if(argc != 4) {
@@ -82,7 +84,15 @@ int main(int argc, char *argv[])
 
     ZDSetErrorHandler(onError);
 
-    ZoneDetect *const cd = ZDOpenDatabase(argv[1]);
+    uint8_t* data = malloc(128*1024*1024);
+    FILE* f= fopen(argv[1], "rb");
+    if(!f){ return 3; }
+    size_t bytes =  fread(data, 1, 128*1024*1024, f);
+    fclose(f);
+
+    printf("Read %lu bytes\n", bytes);
+    //ZoneDetect *const cd = ZDOpenDatabase(argv[1]);
+    ZoneDetect *const cd = ZDOpenDatabaseFromMemory(data, bytes);
     if(!cd) return 2;
 
     const float lat = (float)atof(argv[2]);
@@ -91,6 +101,8 @@ int main(int argc, char *argv[])
     float safezone = 0;
     ZoneDetectResult *results = ZDLookup(cd, lat, lon, &safezone);
     printResults(cd, results, safezone);
+
+    printf("The magic string is [%s]\n", ZDHelperLookupString(cd, lat, lon));
 
     ZDCloseDatabase(cd);
 

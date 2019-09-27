@@ -68,6 +68,7 @@ struct ZoneDetectOpaque {
     off_t length;
 #endif
 
+    uint8_t closeType;
     uint8_t *mapping;
 
     uint8_t tableType;
@@ -785,17 +786,49 @@ void ZDCloseDatabase(ZoneDetect *library)
             free(library->notice);
         }
 
+        if(library->closeType == 0) {
 #if defined(_MSC_VER) || defined(__MINGW32__)
-        if(library->mapping && !UnmapViewOfFile(library->mapping)) zdError(ZD_E_DB_MUNMAP_MSVIEW, (int)GetLastError());
-        if(library->fdMap && !CloseHandle(library->fdMap))         zdError(ZD_E_DB_MUNMAP       , (int)GetLastError());
-        if(library->fd && !CloseHandle(library->fd))               zdError(ZD_E_DB_CLOSE        , (int)GetLastError());
+            if(library->mapping && !UnmapViewOfFile(library->mapping)) zdError(ZD_E_DB_MUNMAP_MSVIEW, (int)GetLastError());
+            if(library->fdMap && !CloseHandle(library->fdMap))         zdError(ZD_E_DB_MUNMAP, (int)GetLastError());
+            if(library->fd && !CloseHandle(library->fd))               zdError(ZD_E_DB_CLOSE, (int)GetLastError());
 #else
-        if(library->mapping && munmap(library->mapping, (size_t)(library->length))) zdError(ZD_E_DB_MUNMAP, errno);
-        if(library->fd >= 0 && close(library->fd))                                  zdError(ZD_E_DB_CLOSE , errno);
+            if(library->mapping && munmap(library->mapping, (size_t)(library->length))) zdError(ZD_E_DB_MUNMAP, errno);
+            if(library->fd >= 0 && close(library->fd))                                  zdError(ZD_E_DB_CLOSE, errno);
 #endif
+        }
 
         free(library);
     }
+}
+
+ZoneDetect *ZDOpenDatabaseFromMemory(void* buffer, size_t length)
+{
+    ZoneDetect *const library = malloc(sizeof *library);
+
+    if(library) {
+        memset(library, 0, sizeof(*library));
+        library->closeType = 1;
+        library->length = (long int)length;
+
+        if(library->length <= 0) {
+            zdError(ZD_E_DB_SEEK, errno);
+            goto fail;
+        }
+
+        library->mapping = buffer;
+
+        /* Parse the header */
+        if(ZDParseHeader(library)) {
+            zdError(ZD_E_PARSE_HEADER, 0);
+            goto fail;
+        }
+    }
+
+    return library;
+
+fail:
+    ZDCloseDatabase(library);
+    return NULL;
 }
 
 ZoneDetect *ZDOpenDatabase(const char *path)
@@ -1030,22 +1063,22 @@ uint8_t ZDGetTableType(const ZoneDetect *library)
 const char *ZDLookupResultToString(ZDLookupResult result)
 {
     switch(result) {
-    case ZD_LOOKUP_IGNORE:
-        return "Ignore";
-    case ZD_LOOKUP_END:
-        return "End";
-    case ZD_LOOKUP_PARSE_ERROR:
-        return "Parsing error";
-    case ZD_LOOKUP_NOT_IN_ZONE:
-        return "Not in zone";
-    case ZD_LOOKUP_IN_ZONE:
-        return "In zone";
-    case ZD_LOOKUP_IN_EXCLUDED_ZONE:
-        return "In excluded zone";
-    case ZD_LOOKUP_ON_BORDER_VERTEX:
-        return "Target point is border vertex";
-    case ZD_LOOKUP_ON_BORDER_SEGMENT:
-        return "Target point is on border";
+        case ZD_LOOKUP_IGNORE:
+            return "Ignore";
+        case ZD_LOOKUP_END:
+            return "End";
+        case ZD_LOOKUP_PARSE_ERROR:
+            return "Parsing error";
+        case ZD_LOOKUP_NOT_IN_ZONE:
+            return "Not in zone";
+        case ZD_LOOKUP_IN_ZONE:
+            return "In zone";
+        case ZD_LOOKUP_IN_EXCLUDED_ZONE:
+            return "In excluded zone";
+        case ZD_LOOKUP_ON_BORDER_VERTEX:
+            return "Target point is border vertex";
+        case ZD_LOOKUP_ON_BORDER_SEGMENT:
+            return "Target point is on border";
     }
 
     return "Unknown";
@@ -1056,30 +1089,30 @@ const char *ZDLookupResultToString(ZDLookupResult result)
 const char *ZDGetErrorString(int errZD)
 {
     switch ((enum ZDInternalError)errZD) {
-    default:
-        assert(0);
-    case ZD_OK                :
-        return "";
-    case ZD_E_DB_OPEN         :
-        return ZD_E_COULD_NOT("open database file");
-    case ZD_E_DB_SEEK         :
-        return ZD_E_COULD_NOT("retrieve database file size");
-    case ZD_E_DB_MMAP         :
-        return ZD_E_COULD_NOT("map database file to system memory");
+        default:
+            assert(0);
+        case ZD_OK                :
+            return "";
+        case ZD_E_DB_OPEN         :
+            return ZD_E_COULD_NOT("open database file");
+        case ZD_E_DB_SEEK         :
+            return ZD_E_COULD_NOT("retrieve database file size");
+        case ZD_E_DB_MMAP         :
+            return ZD_E_COULD_NOT("map database file to system memory");
 #if defined(_MSC_VER) || defined(__MINGW32__)
-    case ZD_E_DB_MMAP_MSVIEW  :
-        return ZD_E_COULD_NOT("open database file view");
-    case ZD_E_DB_MAP_EXCEPTION:
-        return "I/O exception occurred while accessing database file view";
-    case ZD_E_DB_MUNMAP_MSVIEW:
-        return ZD_E_COULD_NOT("close database file view");
+        case ZD_E_DB_MMAP_MSVIEW  :
+            return ZD_E_COULD_NOT("open database file view");
+        case ZD_E_DB_MAP_EXCEPTION:
+            return "I/O exception occurred while accessing database file view";
+        case ZD_E_DB_MUNMAP_MSVIEW:
+            return ZD_E_COULD_NOT("close database file view");
 #endif
-    case ZD_E_DB_MUNMAP       :
-        return ZD_E_COULD_NOT("unmap database");
-    case ZD_E_DB_CLOSE        :
-        return ZD_E_COULD_NOT("close database file");
-    case ZD_E_PARSE_HEADER    :
-        return ZD_E_COULD_NOT("parse database header");
+        case ZD_E_DB_MUNMAP       :
+            return ZD_E_COULD_NOT("unmap database");
+        case ZD_E_DB_CLOSE        :
+            return ZD_E_COULD_NOT("close database file");
+        case ZD_E_PARSE_HEADER    :
+            return ZD_E_COULD_NOT("parse database header");
     }
 }
 
@@ -1089,4 +1122,67 @@ int ZDSetErrorHandler(void (*handler)(int, int))
 {
     zdErrorHandler = handler;
     return 0;
+}
+
+char* ZDHelperLookupString(const ZoneDetect* library, float lat, float lon)
+{
+    ZoneDetectResult *result = ZDLookup(library, lat, lon, NULL);
+    if(!result) {
+        return NULL;
+    }
+
+    char* output = NULL;
+
+    if(result[0].lookupResult == ZD_LOOKUP_END) {
+        goto done;
+    }
+
+    char* strings[2] = {NULL};
+
+    for(unsigned int i = 0; i < result[0].numFields; i++) {
+        if(result[0].fieldNames[i] && result[0].data[i]) {
+            if(library->tableType == 'T') {
+                if(!strcmp(result[0].fieldNames[i], "TimezoneIdPrefix")) {
+                    strings[0] = result[0].data[i];
+                }
+                if(!strcmp(result[0].fieldNames[i], "TimezoneId")) {
+                    strings[1] = result[0].data[i];
+                }
+            }
+            if(library->tableType == 'C') {
+                if(!strcmp(result[0].fieldNames[i], "Name")) {
+                    strings[0] = result[0].data[i];
+                }
+            }
+        }
+    }
+
+    size_t length = 0;
+    for(unsigned int i=0; i<sizeof(strings)/sizeof(char*); i++) {
+        if(strings[i]) {
+            size_t partLength = strlen(strings[i]);
+            if(partLength > 512) {
+                goto done;
+            }
+            length += partLength;
+        }
+    }
+
+    if(length == 0) {
+        goto done;
+    }
+
+    length += 1;
+
+    output = (char*)malloc(length);
+    output[0] = 0;
+    for(unsigned int i=0; i<sizeof(strings)/sizeof(char*); i++) {
+        if(strings[i]) {
+            strcat(output + strlen(output), strings[i]);
+        }
+    }
+
+done:
+    ZDFreeResults(result);
+    return output;
 }
