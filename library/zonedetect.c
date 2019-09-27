@@ -1124,7 +1124,7 @@ int ZDSetErrorHandler(void (*handler)(int, int))
     return 0;
 }
 
-char* ZDHelperLookupString(const ZoneDetect* library, float lat, float lon)
+char* ZDHelperSimpleLookupString(const ZoneDetect* library, float lat, float lon)
 {
     ZoneDetectResult *result = ZDLookup(library, lat, lon, NULL);
     if(!result) {

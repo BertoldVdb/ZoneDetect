@@ -1,3 +1,4 @@
+
 /*
  * Copyright (c) 2018, Bertold Van den Bergh (vandenbergh@bertold.org)
  * All rights reserved.
@@ -27,7 +28,6 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include "zonedetect.h"
 
 void printResults(ZoneDetect *cd, ZoneDetectResult *results, float safezone)
@@ -74,7 +74,6 @@ void onError(int errZD, int errNative)
     fprintf(stderr, "ZD error: %s (0x%08X)\n", ZDGetErrorString(errZD), (unsigned)errNative);
 }
 
-
 int main(int argc, char *argv[])
 {
     if(argc != 4) {
@@ -84,15 +83,7 @@ int main(int argc, char *argv[])
 
     ZDSetErrorHandler(onError);
 
-    uint8_t* data = malloc(128*1024*1024);
-    FILE* f= fopen(argv[1], "rb");
-    if(!f){ return 3; }
-    size_t bytes =  fread(data, 1, 128*1024*1024, f);
-    fclose(f);
-
-    printf("Read %lu bytes\n", bytes);
-    //ZoneDetect *const cd = ZDOpenDatabase(argv[1]);
-    ZoneDetect *const cd = ZDOpenDatabaseFromMemory(data, bytes);
+    ZoneDetect *const cd = ZDOpenDatabase(argv[1]);
     if(!cd) return 2;
 
     const float lat = (float)atof(argv[2]);
@@ -102,7 +93,7 @@ int main(int argc, char *argv[])
     ZoneDetectResult *results = ZDLookup(cd, lat, lon, &safezone);
     printResults(cd, results, safezone);
 
-    printf("The magic string is [%s]\n", ZDHelperLookupString(cd, lat, lon));
+    printf("The simple string is [%s]\n", ZDHelperSimpleLookupString(cd, lat, lon));
 
     ZDCloseDatabase(cd);
 
