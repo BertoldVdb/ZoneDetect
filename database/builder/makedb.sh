@@ -1,5 +1,7 @@
 #!/bin/sh
 
+apt install build-essential libshp-dev
+
 g++ builder.cpp -o builder -lshp
 
 rm -rf out naturalearth timezone db.zip
