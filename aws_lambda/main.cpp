@@ -85,7 +85,7 @@ invocation_response zd_handler(invocation_request const& request){
 }
 
 int main(){
-    zd = ZDOpenDatabase("out_v1/timezone21.bin");
+    zd = ZDOpenDatabase("timezone21.bin");
     if(!zd) {
         return 1;
     }
