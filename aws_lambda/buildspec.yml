@@ -30,6 +30,6 @@ phases:
 
 artifacts:
   files:
-    - **/*
+    - '**/*'
   base-directory: aws_lambda/build/output/
 
