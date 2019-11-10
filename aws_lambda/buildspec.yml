@@ -1,0 +1,33 @@
+version: 0.2
+
+phases:
+  pre_build:
+    commands:
+       - apt update
+       - apt install -y cmake git
+       - git clone https://github.com/awslabs/aws-lambda-cpp.git
+       - cd aws-lambda-cpp
+       - mkdir build
+       - cd build
+       - cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DCMAKE_INSTALL_PREFIX=~/out
+       - make && make install
+       - cd ../../
+  build:
+    commands:
+      - cd aws_lambda
+      - mkdir build
+      - cd build
+      - cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=~/out 
+      - make -j 4 aws-lambda-package-timezone
+  post_build:
+    commands:
+      - wget https://bertold-cdn.s3.eu-central-1.amazonaws.com/zonedetect/db/db.zip -o /dev/null
+      - unzip db.zip
+      - mv out_v1/timezone21.bin .
+      - zip timezone.zip timezone21.bin
+
+artifacts:
+  files:
+    - aws_lambda/build/timezone.zip
+  discard-paths: yes
+
