@@ -20,4 +20,4 @@ You are free to use this API for any application, but I am not responsible for t
 
 
 ### Demo
-An online demo is available here: [https://cdn.bertold.org/demo/timezone.html](https://timezone.bertold.org/demo/timezone.html). Simple click anywhere on the map and see the result of the query.
+An online demo is available here: [https://cdn.bertold.org/demo/timezone.html](https://cdn.bertold.org/demo/timezone.html). Simple click anywhere on the map and see the result of the query.
