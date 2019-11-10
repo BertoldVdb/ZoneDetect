@@ -72,7 +72,7 @@ invocation_response zd_handler(invocation_request const& request){
 
                 json response;
                 response["statusCode"] = 200;
-                response["headers"]["Cache-Control"] = "no-cache";
+                response["headers"]["Cache-Control"] = "max-age=86400";
                 response["headers"]["Access-Control-Allow-Origin"] = "*";
                 response["body"] = body.dump(compact?0:2);
             
