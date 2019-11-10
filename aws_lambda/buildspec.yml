@@ -23,11 +23,13 @@ phases:
     commands:
       - wget https://bertold-cdn.s3.eu-central-1.amazonaws.com/zonedetect/db/db.zip -o /dev/null
       - unzip db.zip
-      - mv out_v1/timezone21.bin .
-      - zip timezone.zip timezone21.bin
+      - mkdir output
+      - cd output
+      - unzip timezone.zip
+      - mv ../out_v1/timezone21.bin .
 
 artifacts:
   files:
-    - aws_lambda/build/timezone.zip
-  discard-paths: yes
+    - **/*
+  base-directory: aws_lambda/build/output/
 
