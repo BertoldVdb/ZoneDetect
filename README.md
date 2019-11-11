@@ -21,3 +21,5 @@ You are free to use this API for any application, but I am not responsible for t
 
 ### Demo
 An online demo is available here: [https://cdn.bertold.org/demo/timezone.html](https://cdn.bertold.org/demo/timezone.html). Simple click anywhere on the map and see the result of the query.
+
+![CodeBuild](https://codebuild.eu-central-1.amazonaws.com/badges?uuid=eyJlbmNyeXB0ZWREYXRhIjoiVmtHd1UwSThmbkZ4RlkyRVZMQUgyRVFKdjhyRzJ6N29ZQUNUVU4wdFpEcUdZQ29ITzlHQlFEU0VZd1dXcEtJUlRvcUFLSDJLTnp5V2lQUGkxNGs1ZUdJPSIsIml2UGFyYW1ldGVyU3BlYyI6ImxxUnFTTVBreUNrK2xPeHYiLCJtYXRlcmlhbFNldFNlcmlhbCI6MX0%3D&branch=master)
