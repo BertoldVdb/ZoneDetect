@@ -36,6 +36,10 @@ else
   EXT=so
 endif
 
+prefix ?= /usr
+libdir ?= $(prefix)/lib
+includedir ?= $(prefix)/include
+
 EXECUTABLE=libzonedetect.$(EXT)
 INCLUDES_SRC=zonedetect.h
 SOURCES_SRC=zonedetect.c
@@ -59,9 +63,12 @@ clean:
 	rm -rf $(OBJECTS_OBJ) $(EXECUTABLE)
 
 install:
-	cp zonedetect.h /usr/include/
-	cp $(EXECUTABLE) /usr/lib/
-	ldconfig
+	install -m 0755 -d $(DESTDIR)$(includedir) $(DESTDIR)$(libdir)
+	install -m 0644 -t $(DESTDIR)$(includedir) zonedetect.h
+	install -m 0644 -t $(DESTDIR)$(libdir) $(EXECUTABLE)
+	# Assuming DESTDIR is set for cross-installing only, we don't need
+	# (and probably do not have) ldconfig
+	$(if $(DESTDIR),,ldconfig)
 
 nice:
 	mkdir -p bak/
