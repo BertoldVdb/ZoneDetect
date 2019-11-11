@@ -388,7 +388,7 @@ readNewPoint:
     uint8_t referenceDone = 0;
 
     if(reader->library->version == 1) {
-        uint64_t point;
+        uint64_t point = 0;
 
         if(!reader->referenceDirection) {
             if(!ZDDecodeVariableLengthUnsigned(reader->library, &reader->polygonIndex, &point)) return -1;
