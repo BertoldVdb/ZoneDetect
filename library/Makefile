@@ -43,6 +43,8 @@ SOURCES_SRC=zonedetect.c
 
 OBJECTS_OBJ=$(SOURCES_SRC:.c=.o)
 
+.PHONY:	all install clean nice
+
 all: $(EXECUTABLE)
 
 $(EXECUTABLE): $(OBJECTS_OBJ)
