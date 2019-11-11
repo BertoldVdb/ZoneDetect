@@ -27,7 +27,7 @@
 CC?=$(CCARCH)gcc
 STRIP?=$(CCARCH)strip
 
-CFLAGS=-fPIC -O3 -std=gnu99 -pedantic -Wall -Wextra -Wconversion -Werror -c -fmessage-length=0 -ffunction-sections -fdata-sections
+CFLAGS=-fPIC $(if $(DEBUG),-O0 -g,-O3) -std=gnu99 -pedantic -Wall -Wextra -Wconversion -Werror -c -fmessage-length=0 -ffunction-sections -fdata-sections
 LDFLAGS=-shared
 
 ifeq ($(OS),Windows_NT)
@@ -53,7 +53,7 @@ all: $(EXECUTABLE)
 
 $(EXECUTABLE): $(OBJECTS_OBJ)
 	$(CC) $(LDFLAGS) $(OBJECTS_OBJ) -o $@
-	$(STRIP) $@
+	$(if $(DEBUG),,$(STRIP) $@)
 
 
 obj/%.o: src/%.c $(INCLUDES_SRC)
