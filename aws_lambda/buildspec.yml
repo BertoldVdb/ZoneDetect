@@ -26,7 +26,7 @@ phases:
       - mkdir output
       - cd output
       - unzip ../timezone.zip
-      - mv ../out_v1/timezone21.bin .
+      - mv ../out/timezone21.bin .
 
 artifacts:
   files:
