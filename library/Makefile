@@ -27,13 +27,14 @@
 CC?=$(CCARCH)gcc
 STRIP?=$(CCARCH)strip
 
-CFLAGS=-fPIC $(if $(DEBUG),-O0 -g,-O3) -std=gnu99 -pedantic -Wall -Wextra -Wconversion -Werror -c -fmessage-length=0 -ffunction-sections -fdata-sections
+CFLAGS=$(if $(DEBUG),-O0 -g,-O3) -std=gnu99 -pedantic -Wall -Wextra -Wconversion -Werror -c -fmessage-length=0 -ffunction-sections -fdata-sections
 LDFLAGS=-shared
 
 ifeq ($(OS),Windows_NT)
   EXT=dll
 else
   EXT=so
+  CFLAGS += -fPIC
   LDFLAGS += -Wl,--hash-style=gnu
 endif
 
