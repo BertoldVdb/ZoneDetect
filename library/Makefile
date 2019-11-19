@@ -34,6 +34,7 @@ ifeq ($(OS),Windows_NT)
   EXT=dll
 else
   EXT=so
+  LDFLAGS += -Wl,--hash-style=gnu
 endif
 
 prefix ?= /usr
