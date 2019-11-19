@@ -53,8 +53,6 @@ all: $(EXECUTABLE)
 
 $(EXECUTABLE): $(OBJECTS_OBJ)
 	$(CC) $(LDFLAGS) $(OBJECTS_OBJ) -o $@
-	$(if $(DEBUG),,$(STRIP) $@)
-
 
 obj/%.o: src/%.c $(INCLUDES_SRC)
 	$(CC) $(CFLAGS) $< -o $@
@@ -65,7 +63,7 @@ clean:
 install:
 	install -m 0755 -d $(DESTDIR)$(includedir) $(DESTDIR)$(libdir)
 	install -m 0644 -t $(DESTDIR)$(includedir) zonedetect.h
-	install -m 0644 -t $(DESTDIR)$(libdir) $(EXECUTABLE)
+	install -m 0644 -t $(DESTDIR)$(libdir) $(EXECUTABLE) $(if $(STRIP),--strip --strip-program=$(STRIP))
 	# Assuming DESTDIR is set for cross-installing only, we don't need
 	# (and probably do not have) ldconfig
 	$(if $(DESTDIR),,ldconfig)
