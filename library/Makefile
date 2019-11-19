@@ -23,6 +23,8 @@
 #(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 #SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+# https://www.gnu.org/software/libtool/manual/html_node/Updating-version-info.html
+VERSION = 0.0.0
 
 CC?=$(CCARCH)gcc
 STRIP?=$(CCARCH)strip
@@ -34,8 +36,10 @@ ifeq ($(OS),Windows_NT)
   EXT=dll
 else
   EXT=so
+  VER_MAJ = $(word 1,$(subst ., ,$(VERSION)))
+  VER_MIN = $(word 2,$(subst ., ,$(VERSION)))
   CFLAGS += -fPIC
-  LDFLAGS += -Wl,--hash-style=gnu
+  LDFLAGS += -Wl,-soname=$(EXECUTABLE).$(VERSION) -Wl,--hash-style=gnu
 endif
 
 prefix ?= /usr
@@ -65,7 +69,14 @@ clean:
 install:
 	install -m 0755 -d $(DESTDIR)$(includedir) $(DESTDIR)$(libdir)
 	install -m 0644 -t $(DESTDIR)$(includedir) zonedetect.h
-	install -m 0644 -t $(DESTDIR)$(libdir) $(EXECUTABLE) $(if $(STRIP),--strip --strip-program=$(STRIP))
+ifeq ($(OS),Windows_NT)
+	install -m 0644 $(EXECUTABLE) -t $(DESTDIR)$(libdir) $(if $(STRIP),--strip --strip-program=$(STRIP))
+else
+	install -m 0644 $(EXECUTABLE) -D $(DESTDIR)$(libdir)/$(EXECUTABLE).$(VERSION) $(if $(STRIP),--strip --strip-program=$(STRIP))
+	ln -sf $(EXECUTABLE).$(VERSION) $(DESTDIR)$(libdir)/$(EXECUTABLE).$(VER_MAJ).$(VER_MIN)
+	ln -sf $(EXECUTABLE).$(VER_MAJ).$(VER_MIN) $(DESTDIR)$(libdir)/$(EXECUTABLE).$(VER_MAJ)
+	ln -sf $(EXECUTABLE).$(VER_MAJ) $(DESTDIR)$(libdir)/$(EXECUTABLE)
+endif
 	# Assuming DESTDIR is set for cross-installing only, we don't need
 	# (and probably do not have) ldconfig
 	$(if $(DESTDIR),,ldconfig)
