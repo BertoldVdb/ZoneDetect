@@ -44,6 +44,9 @@ invocation_response zd_handler(invocation_request const& request){
                 }else{
                     float safezone = 0;
                     auto results = ZDLookup(zd, lat, lon, &safezone);
+                    
+                    body["Safezone"] = safezone;
+
                     if(results){
                         int index = 0;
                         while(results[index].lookupResult != ZD_LOOKUP_END) {
