@@ -45,13 +45,12 @@ invocation_response zd_handler(invocation_request const& request){
                     float safezone = 0;
                     auto results = ZDLookup(zd, lat, lon, &safezone);
                     
-                    body["Safezone"] = safezone;
-
                     if(results){
                         int index = 0;
                         while(results[index].lookupResult != ZD_LOOKUP_END) {
                             auto& zone = body["Zones"][index];
                             zone["Result"] = ZDLookupResultToString(results[index].lookupResult);
+                            body["Safezone"] = safezone;
                         
                             if(results[index].data) {
                                 for(unsigned int i = 0; i < results[index].numFields; i++) {
