@@ -1,15 +1,17 @@
 version: 0.2
 
 phases:
+  install:
+    runtime-versions:
+      golang: 1.13 #Dummy, as this is a required parameter
   pre_build:
     commands:
-       - apt update
-       - apt install -y cmake git
+       - yum install -y cmake3 git gcc gcc-c++ make
        - git clone https://github.com/awslabs/aws-lambda-cpp.git
        - cd aws-lambda-cpp
        - mkdir build
        - cd build
-       - cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DCMAKE_INSTALL_PREFIX=~/out
+       - cmake3 .. -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DCMAKE_INSTALL_PREFIX=~/out
        - make && make install
        - cd ../../
   build:
@@ -17,7 +19,7 @@ phases:
       - cd aws_lambda
       - mkdir build
       - cd build
-      - cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=~/out 
+      - cmake3 .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=~/out 
       - make -j 4 aws-lambda-package-timezone
   post_build:
     commands:
@@ -32,4 +34,3 @@ artifacts:
   files:
     - '**/*'
   base-directory: aws_lambda/build/output/
-
