@@ -66,7 +66,7 @@ obj/%.o: src/%.c $(INCLUDES_SRC)
 clean:
 	rm -rf $(OBJECTS_OBJ) $(EXECUTABLE)
 
-install:
+install: $(EXECUTABLE)
 	install -m 0755 -d $(DESTDIR)$(includedir) $(DESTDIR)$(libdir)
 	install -m 0644 -t $(DESTDIR)$(includedir) zonedetect.h
 ifeq ($(OS),Windows_NT)

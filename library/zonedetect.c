@@ -700,7 +700,7 @@ static ZDLookupResult ZDPointInPolygon(const ZoneDetect *library, uint32_t polyg
 
                 /* Check if the target is on the border */
                 const int32_t intersectLon = (int32_t)(((float)latFixedPoint - b) / a);
-                if(intersectLon == lonFixedPoint) {
+                if(intersectLon >= lonFixedPoint-1 && intersectLon <= lonFixedPoint+1) {
                     if(distanceSqrMin) *distanceSqrMin = 0;
                     return ZD_LOOKUP_ON_BORDER_SEGMENT;
                 }
