@@ -30,6 +30,7 @@ invocation_response zd_handler(invocation_request const& request) {
 
                 json result;
                 int blocked = 0;
+                int compact = 0;
 
                 if(param.count("obs")) {
                     auto obs = static_cast<std::time_t>(std::stol(param["obs"].get<std::string>(), nullptr));
@@ -40,7 +41,6 @@ invocation_response zd_handler(invocation_request const& request) {
                 }
 
                 if(!blocked) {
-                    int compact = 0;
                     if(param.count("c")) {
                         compact = std::stoi(param["c"].get<std::string>());
                     }
