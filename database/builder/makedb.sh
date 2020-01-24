@@ -1,5 +1,7 @@
 #!/bin/sh
 
+set -e
+
 g++ builder.cpp -o builder -lshp
 
 rm -rf out naturalearth timezone db.zip
