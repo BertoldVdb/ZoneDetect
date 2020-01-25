@@ -2,7 +2,7 @@
 
 This is a C library that allows you to find an area a point belongs to using a database file. A typical example would be looking up the country or timezone given a latitude and longitude. The timezone database also contains the country information.
 
-The API should be self-explanatory from zonedetect.h. A small demo is included (demo.c)
+The API should be self-explanatory from zonedetect.h. A small demo is included (demo.c). You can build the demo with `make demo` and run it like this: `./demo timezone21.bin 35.0715 -82.5216`.
 
 The databases are obtained from [here](https://github.com/evansiroky/timezone-boundary-builder) and converted to the format used by this library.
 
