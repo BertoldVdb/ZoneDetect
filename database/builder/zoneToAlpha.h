@@ -28,6 +28,7 @@ result["America/Argentina/Mendoza"] = "AR";
 result["America/Argentina/San_Luis"] = "AR";
 result["America/Argentina/Rio_Gallegos"] = "AR";
 result["America/Argentina/Ushuaia"] = "AR";
+result["America/Nuuk"] = "GL";
 result["Pacific/Pago_Pago"] = "AS";
 result["Europe/Vienna"] = "AT";
 result["Australia/Lord_Howe"] = "AU";
