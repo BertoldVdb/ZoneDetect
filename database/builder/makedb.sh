@@ -11,7 +11,7 @@ mkdir -p naturalearth
 mkdir -p timezone
 
 (
-echo https://www.naturalearthdata.com/http//www.naturalearthdata.com/download/10m/cultural/ne_10m_admin_0_countries_lakes.zip -o /dev/null -O naturalearth/ne.zip
+echo https://naciscdn.org/naturalearth/10m/cultural/ne_10m_admin_0_countries_lakes.zip -o /dev/null -O naturalearth/ne.zip
 echo https://github.com/evansiroky/timezone-boundary-builder/releases/download/2020d/timezones-with-oceans.shapefile.zip -o /dev/null -O timezone/tz.zip
 ) | xargs -n5 -P2 wget
 
@@ -31,10 +31,10 @@ unzip tz.zip
 cd ..
 
 (
-echo "T timezone/dist/combined-shapefile-with-oceans ./out/timezone16.bin 16 \"Contains data from Natural Earth, placed in the Public Domain. Contains information from https://github.com/evansiroky/timezone-boundary-builder, which is made available here under the Open Database License \(ODbL\).\" 0";
-echo "T timezone/dist/combined-shapefile-with-oceans ./out/timezone21.bin 21 \"Contains data from Natural Earth, placed in the Public Domain. Contains information from https://github.com/evansiroky/timezone-boundary-builder, which is made available here under the Open Database License \(ODbL\).\" 0";
-echo "T timezone/dist/combined-shapefile-with-oceans ./out_v1/timezone16.bin 16 \"Contains data from Natural Earth, placed in the Public Domain. Contains information from https://github.com/evansiroky/timezone-boundary-builder, which is made available here under the Open Database License \(ODbL\).\" 1";
-echo "T timezone/dist/combined-shapefile-with-oceans ./out_v1/timezone21.bin 21 \"Contains data from Natural Earth, placed in the Public Domain. Contains information from https://github.com/evansiroky/timezone-boundary-builder, which is made available here under the Open Database License \(ODbL\).\" 1";
+echo "T timezone/combined-shapefile-with-oceans ./out/timezone16.bin 16 \"Contains data from Natural Earth, placed in the Public Domain. Contains information from https://github.com/evansiroky/timezone-boundary-builder, which is made available here under the Open Database License \(ODbL\).\" 0";
+echo "T timezone/combined-shapefile-with-oceans ./out/timezone21.bin 21 \"Contains data from Natural Earth, placed in the Public Domain. Contains information from https://github.com/evansiroky/timezone-boundary-builder, which is made available here under the Open Database License \(ODbL\).\" 0";
+echo "T timezone/combined-shapefile-with-oceans ./out_v1/timezone16.bin 16 \"Contains data from Natural Earth, placed in the Public Domain. Contains information from https://github.com/evansiroky/timezone-boundary-builder, which is made available here under the Open Database License \(ODbL\).\" 1";
+echo "T timezone/combined-shapefile-with-oceans ./out_v1/timezone21.bin 21 \"Contains data from Natural Earth, placed in the Public Domain. Contains information from https://github.com/evansiroky/timezone-boundary-builder, which is made available here under the Open Database License \(ODbL\).\" 1";
 ) | xargs -n 6 -P4 ./builder
 
 rm -rf timezone naturalearth
