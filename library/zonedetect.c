@@ -337,12 +337,12 @@ static int ZDPointInBox(int32_t xl, int32_t x, int32_t xr, int32_t yl, int32_t y
 
 static uint32_t ZDUnshuffle(uint64_t w)
 {
-    w &=                  0x5555555555555555;
-    w = (w | (w >> 1))  & 0x3333333333333333;
-    w = (w | (w >> 2))  & 0x0F0F0F0F0F0F0F0F;
-    w = (w | (w >> 4))  & 0x00FF00FF00FF00FF;
-    w = (w | (w >> 8))  & 0x0000FFFF0000FFFF;
-    w = (w | (w >> 16)) & 0x00000000FFFFFFFF;
+    w &=                  0x5555555555555555llu;
+    w = (w | (w >> 1))  & 0x3333333333333333llu;
+    w = (w | (w >> 2))  & 0x0F0F0F0F0F0F0F0Fllu;
+    w = (w | (w >> 4))  & 0x00FF00FF00FF00FFllu;
+    w = (w | (w >> 8))  & 0x0000FFFF0000FFFFllu;
+    w = (w | (w >> 16)) & 0x00000000FFFFFFFFllu;
     return (uint32_t)w;
 }
 
