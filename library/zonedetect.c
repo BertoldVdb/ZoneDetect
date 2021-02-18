@@ -34,7 +34,7 @@
 #include <math.h>
 #if defined(_MSC_VER) || defined(__MINGW32__)
 #include <windows.h>
-#else
+#elif defined(__APPLE__) || defined(__linux__) || defined(__unix__) || defined(_POSIX_VERSION)
 #include <errno.h>
 #include <sys/mman.h>
 #include <fcntl.h>
@@ -64,9 +64,11 @@ struct ZoneDetectOpaque {
     HANDLE fdMap;
     int32_t length;
     int32_t padding;
-#else
+#elif defined(__APPLE__) || defined(__linux__) || defined(__unix__) || defined(_POSIX_VERSION)
     int fd;
     off_t length;
+#else
+    int length;
 #endif
 
     uint8_t closeType;
@@ -793,9 +795,9 @@ void ZDCloseDatabase(ZoneDetect *library)
             if(library->mapping && !UnmapViewOfFile(library->mapping)) zdError(ZD_E_DB_MUNMAP_MSVIEW, (int)GetLastError());
             if(library->fdMap && !CloseHandle(library->fdMap))         zdError(ZD_E_DB_MUNMAP, (int)GetLastError());
             if(library->fd && !CloseHandle(library->fd))               zdError(ZD_E_DB_CLOSE, (int)GetLastError());
-#else
-            if(library->mapping && munmap(library->mapping, (size_t)(library->length))) zdError(ZD_E_DB_MUNMAP, errno);
-            if(library->fd >= 0 && close(library->fd))                                  zdError(ZD_E_DB_CLOSE, errno);
+#elif defined(__APPLE__) || defined(__linux__) || defined(__unix__) || defined(_POSIX_VERSION)
+            if(library->mapping && munmap(library->mapping, (size_t)(library->length))) zdError(ZD_E_DB_MUNMAP, 0);
+            if(library->fd >= 0 && close(library->fd))                                  zdError(ZD_E_DB_CLOSE, 0);
 #endif
         }
 
@@ -813,7 +815,11 @@ ZoneDetect *ZDOpenDatabaseFromMemory(void* buffer, size_t length)
         library->length = (long int)length;
 
         if(library->length <= 0) {
+#if defined(_MSC_VER) || defined(__MINGW32__) || defined(__APPLE__) || defined(__linux__) || defined(__unix__) || defined(_POSIX_VERSION)
             zdError(ZD_E_DB_SEEK, errno);
+#else
+            zdError(ZD_E_DB_SEEK, 0);
+#endif
             goto fail;
         }
 
@@ -865,7 +871,7 @@ ZoneDetect *ZDOpenDatabase(const char *path)
             zdError(ZD_E_DB_MMAP_MSVIEW, (int)GetLastError());
             goto fail;
         }
-#else
+#elif defined(__APPLE__) || defined(__linux__) || defined(__unix__) || defined(_POSIX_VERSION)
         library->fd = open(path, O_RDONLY | O_CLOEXEC);
         if(library->fd < 0) {
             zdError(ZD_E_DB_OPEN, errno);
