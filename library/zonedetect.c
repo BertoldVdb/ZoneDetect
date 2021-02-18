@@ -34,7 +34,7 @@
 #include <math.h>
 #if defined(_MSC_VER) || defined(__MINGW32__)
 #include <windows.h>
-#else
+#elif defined(__APPLE__) || defined(__linux__) || defined(__unix__) || defined(_POSIX_VERSION)
 #include <errno.h>
 #include <sys/mman.h>
 #include <fcntl.h>
@@ -64,9 +64,11 @@ struct ZoneDetectOpaque {
     HANDLE fdMap;
     int32_t length;
     int32_t padding;
-#else
+#elif defined(__APPLE__) || defined(__linux__) || defined(__unix__) || defined(_POSIX_VERSION)
     int fd;
     off_t length;
+#else
+    int length;
 #endif
 
     uint8_t closeType;
@@ -232,7 +234,8 @@ static char *ZDParseString(const ZoneDetect *library, uint32_t *index)
 #if defined(_MSC_VER)
         __try {
 #endif
-            for(size_t i = 0; i < strLength; i++) {
+            size_t i;
+            for(i = 0; i < strLength; i++) {
                 str[i] = (char)(library->mapping[strOffset + i] ^ UINT8_C(0x80));
             }
 #if defined(_MSC_VER)
@@ -286,7 +289,8 @@ static int ZDParseHeader(ZoneDetect *library)
     uint32_t index = UINT32_C(7);
 
     library->fieldNames = malloc(library->numFields * sizeof *library->fieldNames);
-    for(size_t i = 0; i < library->numFields; i++) {
+    size_t i;
+    for(i = 0; i < library->numFields; i++) {
         library->fieldNames[i] = ZDParseString(library, &index);
     }
 
@@ -333,12 +337,12 @@ static int ZDPointInBox(int32_t xl, int32_t x, int32_t xr, int32_t yl, int32_t y
 
 static uint32_t ZDUnshuffle(uint64_t w)
 {
-    w &=                  0x5555555555555555;
-    w = (w | (w >> 1))  & 0x3333333333333333;
-    w = (w | (w >> 2))  & 0x0F0F0F0F0F0F0F0F;
-    w = (w | (w >> 4))  & 0x00FF00FF00FF00FF;
-    w = (w | (w >> 8))  & 0x0000FFFF0000FFFF;
-    w = (w | (w >> 16)) & 0x00000000FFFFFFFF;
+    w &=                  0x5555555555555555llu;
+    w = (w | (w >> 1))  & 0x3333333333333333llu;
+    w = (w | (w >> 2))  & 0x0F0F0F0F0F0F0F0Fllu;
+    w = (w | (w >> 4))  & 0x00FF00FF00FF00FFllu;
+    w = (w | (w >> 8))  & 0x0000FFFF0000FFFFllu;
+    w = (w | (w >> 16)) & 0x00000000FFFFFFFFllu;
     return (uint32_t)w;
 }
 
@@ -602,7 +606,8 @@ float* ZDPolygonToList(const ZoneDetect *library, uint32_t polygonId, size_t* le
         goto fail;
     }
 
-    for(size_t i = 0; i<length; i+= 2) {
+    size_t i;
+    for(i = 0; i<length; i+= 2) {
         int32_t lat = data[i];
         int32_t lon = data[i+1];
 
@@ -777,7 +782,8 @@ void ZDCloseDatabase(ZoneDetect *library)
 {
     if(library) {
         if(library->fieldNames) {
-            for(size_t i = 0; i < (size_t)library->numFields; i++) {
+            size_t i;
+            for(i = 0; i < (size_t)library->numFields; i++) {
                 if(library->fieldNames[i]) {
                     free(library->fieldNames[i]);
                 }
@@ -793,9 +799,9 @@ void ZDCloseDatabase(ZoneDetect *library)
             if(library->mapping && !UnmapViewOfFile(library->mapping)) zdError(ZD_E_DB_MUNMAP_MSVIEW, (int)GetLastError());
             if(library->fdMap && !CloseHandle(library->fdMap))         zdError(ZD_E_DB_MUNMAP, (int)GetLastError());
             if(library->fd && !CloseHandle(library->fd))               zdError(ZD_E_DB_CLOSE, (int)GetLastError());
-#else
-            if(library->mapping && munmap(library->mapping, (size_t)(library->length))) zdError(ZD_E_DB_MUNMAP, errno);
-            if(library->fd >= 0 && close(library->fd))                                  zdError(ZD_E_DB_CLOSE, errno);
+#elif defined(__APPLE__) || defined(__linux__) || defined(__unix__) || defined(_POSIX_VERSION)
+            if(library->mapping && munmap(library->mapping, (size_t)(library->length))) zdError(ZD_E_DB_MUNMAP, 0);
+            if(library->fd >= 0 && close(library->fd))                                  zdError(ZD_E_DB_CLOSE, 0);
 #endif
         }
 
@@ -813,7 +819,11 @@ ZoneDetect *ZDOpenDatabaseFromMemory(void* buffer, size_t length)
         library->length = (long int)length;
 
         if(library->length <= 0) {
+#if defined(_MSC_VER) || defined(__MINGW32__) || defined(__APPLE__) || defined(__linux__) || defined(__unix__) || defined(_POSIX_VERSION)
             zdError(ZD_E_DB_SEEK, errno);
+#else
+            zdError(ZD_E_DB_SEEK, 0);
+#endif
             goto fail;
         }
 
@@ -865,7 +875,7 @@ ZoneDetect *ZDOpenDatabase(const char *path)
             zdError(ZD_E_DB_MMAP_MSVIEW, (int)GetLastError());
             goto fail;
         }
-#else
+#elif defined(__APPLE__) || defined(__linux__) || defined(__unix__) || defined(_POSIX_VERSION)
         library->fd = open(path, O_RDONLY | O_CLOEXEC);
         if(library->fd < 0) {
             zdError(ZD_E_DB_OPEN, errno);
@@ -966,10 +976,12 @@ ZoneDetectResult *ZDLookup(const ZoneDetect *library, float lat, float lon, floa
     }
 
     /* Clean up results */
-    for(size_t i = 0; i < numResults; i++) {
+    size_t i;
+    for(i = 0; i < numResults; i++) {
         int insideSum = 0;
         ZDLookupResult overrideResult = ZD_LOOKUP_IGNORE;
-        for(size_t j = i; j < numResults; j++) {
+        size_t j;
+        for(j = i; j < numResults; j++) {
             if(results[i].metaId == results[j].metaId) {
                 ZDLookupResult tmpResult = results[j].lookupResult;
                 results[j].lookupResult = ZD_LOOKUP_IGNORE;
@@ -998,7 +1010,7 @@ ZoneDetectResult *ZDLookup(const ZoneDetect *library, float lat, float lon, floa
 
     /* Remove zones to ignore */
     size_t newNumResults = 0;
-    for(size_t i = 0; i < numResults; i++) {
+    for(i = 0; i < numResults; i++) {
         if(results[i].lookupResult != ZD_LOOKUP_IGNORE) {
             results[newNumResults] = results[i];
             newNumResults++;
@@ -1007,11 +1019,12 @@ ZoneDetectResult *ZDLookup(const ZoneDetect *library, float lat, float lon, floa
     numResults = newNumResults;
 
     /* Lookup metadata */
-    for(size_t i = 0; i < numResults; i++) {
+    for(i = 0; i < numResults; i++) {
         uint32_t tmpIndex = library->metadataOffset + results[i].metaId;
         results[i].data = malloc(library->numFields * sizeof *results[i].data);
         if(results[i].data) {
-            for(size_t j = 0; j < library->numFields; j++) {
+            size_t j;
+            for(j = 0; j < library->numFields; j++) {
                 results[i].data[j] = ZDParseString(library, &tmpIndex);
             }
         }
@@ -1040,7 +1053,8 @@ void ZDFreeResults(ZoneDetectResult *results)
 
     while(results[index].lookupResult != ZD_LOOKUP_END) {
         if(results[index].data) {
-            for(size_t i = 0; i < (size_t)results[index].numFields; i++) {
+            size_t i;
+            for(i = 0; i < (size_t)results[index].numFields; i++) {
                 if(results[index].data[i]) {
                     free(results[index].data[i]);
                 }
@@ -1141,7 +1155,8 @@ char* ZDHelperSimpleLookupString(const ZoneDetect* library, float lat, float lon
 
     char* strings[2] = {NULL};
 
-    for(unsigned int i = 0; i < result[0].numFields; i++) {
+    unsigned int i;
+    for(i = 0; i < result[0].numFields; i++) {
         if(result[0].fieldNames[i] && result[0].data[i]) {
             if(library->tableType == 'T') {
                 if(!strcmp(result[0].fieldNames[i], "TimezoneIdPrefix")) {
@@ -1160,7 +1175,7 @@ char* ZDHelperSimpleLookupString(const ZoneDetect* library, float lat, float lon
     }
 
     size_t length = 0;
-    for(unsigned int i=0; i<sizeof(strings)/sizeof(char*); i++) {
+    for(i=0; i<sizeof(strings)/sizeof(char*); i++) {
         if(strings[i]) {
             size_t partLength = strlen(strings[i]);
             if(partLength > 512) {
@@ -1178,7 +1193,7 @@ char* ZDHelperSimpleLookupString(const ZoneDetect* library, float lat, float lon
 
     output = (char*)malloc(length);
     output[0] = 0;
-    for(unsigned int i=0; i<sizeof(strings)/sizeof(char*); i++) {
+    for(i=0; i<sizeof(strings)/sizeof(char*); i++) {
         if(strings[i]) {
             strcat(output + strlen(output), strings[i]);
         }
