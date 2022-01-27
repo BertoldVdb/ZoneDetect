@@ -49,7 +49,7 @@ void errorFatal(std::string what)
     exit(1);
 }
 
-void assert(bool mustBeTrue, std::string what){
+void assert_(bool mustBeTrue, std::string what){
     if(!mustBeTrue){
         errorFatal(what);
     }
@@ -87,13 +87,13 @@ int encodeVariableLength(std::vector<uint8_t>& output, int64_t valueIn, bool han
 }
 
 uint64_t encodePointTo64(int64_t lat, int64_t lon){
-    assert(lat || lon, "Tried to encode 0,0. This is not allowed");
+    assert_(lat || lon, "Tried to encode 0,0. This is not allowed");
 
     uint64_t latu=encodeSignedToUnsigned(lat);
     uint64_t lonu=encodeSignedToUnsigned(lon);
 
-    assert(latu < (uint64_t)1<<32, "Unsigned lat overflow");
-    assert(lonu < (uint64_t)1<<32, "Unsigned lat overflow");
+    assert_(latu < (uint64_t)1<<32, "Unsigned lat overflow");
+    assert_(lonu < (uint64_t)1<<32, "Unsigned lat overflow");
 
     uint64_t point = 0;
     for(uint8_t i=31; i<=31; i--){
