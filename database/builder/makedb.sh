@@ -2,7 +2,7 @@
 
 set -e
 
-g++ builder.cpp -o builder -lshp
+g++ builder.cpp --std=c++11 -o builder -lshp
 
 rm -rf out naturalearth timezone db.zip
 mkdir -p out
