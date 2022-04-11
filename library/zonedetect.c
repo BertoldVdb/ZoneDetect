@@ -1249,3 +1249,8 @@ done:
     ZDFreeResults(result);
     return output;
 }
+
+void ZDHelperSimpleLookupStringFree(char* str)
+{
+    free(str);
+}
