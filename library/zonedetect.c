@@ -1241,7 +1241,7 @@ char* ZDHelperSimpleLookupString(const ZoneDetect* library, float lat, float lon
         for(i=0; i<sizeof(strings)/sizeof(char*); i++) {
             if(strings[i]) {
 #if defined(_MSC_VER)
-                strcat_s(output + strlen(output),length-strlen(output), strings[i]);
+                strcat_s(output + strlen(output), length-strlen(output), strings[i]);
 #else
                 strcat(output + strlen(output), strings[i]);
 #endif
