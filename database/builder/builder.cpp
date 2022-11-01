@@ -629,6 +629,7 @@ std::unordered_map<std::string, std::string> parseAlpha2ToName(DBFHandle dataHan
     result["YT"]="Mayotte";
     result["RE"]="Réunion";
     result["TK"]="Tokelau";
+    result["TW"]="Taiwan";
 
     return result;
 }
