@@ -6,7 +6,7 @@ phases:
       golang: 1.13 #Dummy, as this is a required parameter
   pre_build:
     commands:
-       - yum install -y cmake3 git gcc gcc-c++ make
+       - yum install -y cmake3 git gcc gcc-c++ make libc6
        - git clone https://github.com/awslabs/aws-lambda-cpp.git
        - cd aws-lambda-cpp
        - mkdir build
