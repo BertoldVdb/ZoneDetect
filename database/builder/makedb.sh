@@ -12,7 +12,7 @@ mkdir -p timezone
 
 (
 echo https://naciscdn.org/naturalearth/10m/cultural/ne_10m_admin_0_countries_lakes.zip -o /dev/null -O naturalearth/ne.zip
-echo https://github.com/evansiroky/timezone-boundary-builder/releases/download/2024b/timezones-with-oceans.shapefile.zip -o /dev/null -O timezone/tz.zip
+echo https://github.com/evansiroky/timezone-boundary-builder/releases/download/2026a/timezones-with-oceans.shapefile.zip -o /dev/null -O timezone/tz.zip
 ) | xargs -n5 -P2 wget
 
 cd naturalearth
