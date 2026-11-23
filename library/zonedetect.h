@@ -76,6 +76,8 @@ ZD_EXPORT void              ZDFreeResults(ZoneDetectResult *results);
 
 ZD_EXPORT const char *ZDGetNotice(const ZoneDetect *library);
 ZD_EXPORT uint8_t     ZDGetTableType(const ZoneDetect *library);
+ZD_EXPORT uint8_t     ZDGetVersion(const ZoneDetect *library);
+ZD_EXPORT uint8_t     ZDGetPrecision(const ZoneDetect *library);
 ZD_EXPORT const char *ZDLookupResultToString(ZDLookupResult result);
 
 ZD_EXPORT int         ZDSetErrorHandler(void (*handler)(int, int));

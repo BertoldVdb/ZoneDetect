@@ -1121,6 +1121,16 @@ uint8_t ZDGetTableType(const ZoneDetect *library)
     return library->tableType;
 }
 
+uint8_t ZDGetVersion(const ZoneDetect *library)
+{
+    return library->version;
+}
+
+uint8_t ZDGetPrecision(const ZoneDetect *library)
+{
+    return library->precision;
+}
+
 const char *ZDLookupResultToString(ZDLookupResult result)
 {
     switch(result) {
