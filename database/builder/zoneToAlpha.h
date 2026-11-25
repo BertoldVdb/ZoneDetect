@@ -119,6 +119,7 @@ result["Africa/Brazzaville"] = "CG";
 result["Europe/Zurich"] = "CH";
 result["Africa/Abidjan"] = "CI";
 result["Pacific/Rarotonga"] = "CK";
+result["America/Coyhaique"] = "CL";
 result["America/Santiago"] = "CL";
 result["America/Punta_Arenas"] = "CL";
 result["Pacific/Easter"] = "CL";
