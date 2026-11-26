@@ -209,6 +209,7 @@ struct PolygonData {
 
     struct LineSegment {
         std::vector<Point*> points_;
+        std::vector<int> rawIndex_; /* position of each point in the polygon being encoded */
         Point* prevPoint_;
         PolygonData* parent_;
     
@@ -244,8 +245,10 @@ struct PolygonData {
             int64_t prevLat, prevLon;
             
             Point* prevPoint = prevPoint_;
+            int prevRaw = rawIndex_[start] - 1;
             if(start > 0){
                 prevPoint = points_[start-1];
+                prevRaw = rawIndex_[start-1];
             }
 
             std::tie(prevLat, prevLon) = prevPoint->value();
@@ -265,7 +268,9 @@ struct PolygonData {
                 }
 
                 /* Mark points as encoded if we mark and we are the parent */
-                if(mark && prevPoint->parent_ == mark){
+                /* A ring can visit the same point more than once; only the visit at
+                 * index_ may be referenced, since that is what segments are built from */
+                if(mark && prevPoint->parent_ == mark && prevRaw == prevPoint->index_){
                     prevPoint->encoded_ = true;
                     prevPoint->encodedOffset_ = output.size();
                 }
@@ -299,6 +304,7 @@ struct PolygonData {
                 prevLat = lat;
                 prevLon = lon;
                 prevPoint = point;
+                prevRaw = rawIndex_[i];
             } 
             
             /* Encode remainder if needed */ 
@@ -407,6 +413,7 @@ struct PolygonData {
             }
 
             segment->points_.push_back(point);
+            segment->rawIndex_.push_back(i);
 
             prevPoint = point;
         }

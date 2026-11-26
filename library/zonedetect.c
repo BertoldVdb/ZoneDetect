@@ -452,7 +452,9 @@ readNewPoint:
         }
     }
 
-    if(reader->library->version == 0) {
+    /* When closing the polygon there is nothing left to read; reading anyway
+     * runs into the next polygon, or past the end of the file for the last one */
+    if(reader->library->version == 0 && !reader->done) {
         if(!ZDDecodeVariableLengthSigned(reader->library, &reader->polygonIndex, &diffLat)) return -1;
         if(!ZDDecodeVariableLengthSigned(reader->library, &reader->polygonIndex, &diffLon)) return -1;
     }
@@ -473,7 +475,7 @@ readNewPoint:
 
     reader->first = 0;
 
-    if(reader->library->version == 0) {
+    if(reader->library->version == 0 && reader->done < 2) {
         reader->numVertices--;
         if(!reader->numVertices) {
             reader->done = 1;
